@@ -40,42 +40,48 @@ interface RelationshipsWrapper {
   relationships_follow_requests_sent?: RawFollowerEntry[]
 }
 
-function parseFollowers1(raw: string): string[] {
+function parseFollowers1(raw: string): { username: string; timestamp: number }[] {
   const arr = JSON.parse(raw) as RawFollowerEntry[]
-  const usernames: string[] = []
+  const result: { username: string; timestamp: number }[] = []
   for (const entry of arr) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value && s.timestamp !== undefined) {
+        result.push({ username: s.value, timestamp: s.timestamp })
+      }
     }
   }
-  return usernames
+  return result
 }
 
-function parseFollowing(raw: string): string[] {
+function parseFollowing(raw: string): { username: string; timestamp: number }[] {
   const obj = JSON.parse(raw) as RelationshipsWrapper
   const list = obj.relationships_following || []
-  const usernames: string[] = []
+  const result: { username: string; timestamp: number }[] = []
   for (const entry of list) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value && s.timestamp !== undefined) {
+        result.push({ username: s.value, timestamp: s.timestamp })
+      }
     }
   }
-  return usernames
+  return result
 }
 
-function parsePending(raw: string): string[] {
+function parsePending(raw: string): { username: string; timestamp: number }[] {
   const obj = JSON.parse(raw) as RelationshipsWrapper
   const list = obj.relationships_follow_requests_sent || []
-  const usernames: string[] = []
+  const result: { username: string; timestamp: number }[] = []
   for (const entry of list) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value && s.timestamp !== undefined) {
+        result.push({ username: s.value, timestamp: s.timestamp })
+      }
     }
   }
-  return usernames
+  return result
 }
 
 export async function POST(request: Request) {
@@ -109,6 +115,9 @@ export async function POST(request: Request) {
     })
   }
 
+  // Convert snapshot date to a Date object for fallback timestamps
+  const snapshotTs = new Date(snapshotDate + 'T00:00:00.000Z')
+
   try {
     // Step 2: Snapshot Check
     const existing = await prisma.snapshot.findUnique({
@@ -123,25 +132,35 @@ export async function POST(request: Request) {
     }
 
     // Step 3: Data Parsing
-    let followers: string[] = []
-    let following: string[] = []
-    let pending: string[] = []
+    let followersData: { username: string; timestamp: number }[] = []
+    let followingData: { username: string; timestamp: number }[] = []
+    let pendingData: { username: string; timestamp: number }[] = []
 
     try {
-      followers = parseFollowers1(followers_1_json)
-      following = parseFollowing(following_json)
-      pending = parsePending(pending_follow_requests_json)
+      followersData = parseFollowers1(followers_1_json)
+      followingData = parseFollowing(following_json)
+      pendingData = parsePending(pending_follow_requests_json)
     } catch (err: any) {
       return jsonError('Failed to parse one of the JSON payloads', 400, {
         detail: err?.message,
       })
     }
 
+    // Create maps for quick timestamp lookup
+    const followersMap = new Map(followersData.map(item => [item.username, item.timestamp]))
+    const followingMap = new Map(followingData.map(item => [item.username, item.timestamp]))
+    const pendingMap = new Map(pendingData.map(item => [item.username, item.timestamp]))
+
+    // Extract usernames for normalization and uniqueness
+    const followersUsernames = followersData.map(item => item.username)
+    const followingUsernames = followingData.map(item => item.username)
+    const pendingUsernames = pendingData.map(item => item.username)
+
     // Normalize usernames (trim, lower?) - assuming case-sensitive handle, we just trim.
     const norm = (u: string) => u.trim()
-    followers = followers.map(norm)
-    following = following.map(norm)
-    pending = pending.map(norm)
+    const followers = followersUsernames.map(norm)
+    const following = followingUsernames.map(norm)
+    const pending = pendingUsernames.map(norm)
 
     // Collect all unique usernames
     const allUsernames = Array.from(
@@ -237,17 +256,18 @@ export async function POST(request: Request) {
         // FR-1.3.1: Inbound Followers
         const isNowFollower = followersSet.has(username)
         if (isNowFollower && !p.is_active_follower) {
+          const ts = followersMap.get(username)
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'FOLLOWED_ME',
-            event_ts: now,
+            event_ts: ts ? new Date(ts * 1000) : snapshotTs,
           })
           scheduleFlagUpdate(p.profile_pk, { is_active_follower: true })
         } else if (!isNowFollower && p.is_active_follower) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'UNFOLLOWED_ME',
-            event_ts: now,
+            event_ts: snapshotTs,
           })
           scheduleFlagUpdate(p.profile_pk, { is_active_follower: false })
         }
@@ -255,10 +275,11 @@ export async function POST(request: Request) {
         // FR-1.3.2: Outbound Following
         const isNowFollowing = followingSet.has(username)
         if (isNowFollowing && !p.is_currently_following) {
+          const ts = followingMap.get(username)
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'I_FOLLOWED',
-            event_ts: now,
+            event_ts: ts ? new Date(ts * 1000) : snapshotTs,
           })
           scheduleFlagUpdate(p.profile_pk, {
             is_currently_following: true,
@@ -268,7 +289,7 @@ export async function POST(request: Request) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'I_UNFOLLOWED',
-            event_ts: now,
+            event_ts: snapshotTs,
           })
           scheduleFlagUpdate(p.profile_pk, { is_currently_following: false })
         }
@@ -276,10 +297,11 @@ export async function POST(request: Request) {
         // FR-1.3.3: Pending Outbound Requests
         const isNowPending = pendingSet.has(username)
         if (isNowPending && !p.is_pending_outbound_request && !isNowFollowing) {
+          const ts = pendingMap.get(username)
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'FOLLOW_REQUEST_SENT',
-            event_ts: now,
+            event_ts: ts ? new Date(ts * 1000) : snapshotTs,
           })
           scheduleFlagUpdate(p.profile_pk, {
             is_pending_outbound_request: true,
@@ -290,14 +312,14 @@ export async function POST(request: Request) {
           !isNowFollowing
         ) {
           // Pending request withdrawn/rejected
-            eventCreates.push({
-              profile_pk: p.profile_pk,
-              event_type: 'PENDING_REQUEST_CANCELLED',
-              event_ts: now,
-            })
-            scheduleFlagUpdate(p.profile_pk, {
-              is_pending_outbound_request: false,
-            })
+          eventCreates.push({
+            profile_pk: p.profile_pk,
+            event_type: 'PENDING_REQUEST_CANCELLED',
+            event_ts: snapshotTs,
+          })
+          scheduleFlagUpdate(p.profile_pk, {
+            is_pending_outbound_request: false,
+          })
         }
       }
 
