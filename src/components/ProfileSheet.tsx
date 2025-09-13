@@ -158,43 +158,10 @@ function EventAttributionEditor({
 }
 
 export function ProfileSheet({ username, open, onClose }: ProfileSheetProps) {
-  const [editingNotes, setEditingNotes] = useState(false)
-  const [notesValue, setNotesValue] = useState('')
-
   const queryClient = useQueryClient()
   const { data: profile, isLoading, isError, error } = useProfile(username || '')
   const { data: campaigns } = useCampaigns()
   const { setAttribution, deleteAttribution } = useAttributionMutations()
-
-  // Update notes value when profile loads
-  useEffect(() => {
-    if (profile) {
-      setNotesValue(profile.notes || '')
-    }
-  }, [profile])
-
-  const handleNotesEdit = () => {
-    setEditingNotes(true)
-  }
-
-  const handleNotesSave = async () => {
-    if (!username) return
-    
-    try {
-      await api.updateProfile(username, { notes: notesValue })
-      toast.success('Notes updated successfully')
-      setEditingNotes(false)
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['profile', username] })
-    } catch (error) {
-      toast.error('Failed to update notes')
-    }
-  }
-
-  const handleNotesCancel = () => {
-    setNotesValue(profile?.notes || '')
-    setEditingNotes(false)
-  }
 
   // Get the appropriate icon component
   const getIconComponent = (iconName: string) => {
@@ -260,43 +227,6 @@ export function ProfileSheet({ username, open, onClose }: ProfileSheetProps) {
           </div>
         ) : (
           <div className="mt-6 space-y-6">
-            {/* Notes Section */}
-            <div className="space-y-3">
-              <h3 className="font-semibold">Notes</h3>
-              {!editingNotes ? (
-                <div className="group flex items-start gap-2">
-                  <div className="flex-1 min-h-[40px] p-2 border rounded text-sm bg-muted/30">
-                    {profile.notes || 'No notes'}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleNotesEdit}
-                  >
-                    Edit
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Textarea
-                    value={notesValue}
-                    onChange={(e) => setNotesValue(e.target.value)}
-                    rows={3}
-                    placeholder="Add notes about this profile..."
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleNotesSave}>
-                      <Save className="h-4 w-4 mr-1" />
-                      Save
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleNotesCancel}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Interaction Timeline */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
