@@ -60,6 +60,8 @@ export function ProfileIdentification() {
   // Query controls
   const [days, setDays] = useState(30)
   const [limit, setLimit] = useState(100)
+  // Parallelization (concurrency) factor; number of profiles processed simultaneously
+  const [concurrency, setConcurrency] = useState(1)
 
   const { data: recentData, isLoading: recentLoading, refetch: refetchRecent, isRefetching } =
     useRecentProfiles({ days, limit })
@@ -252,7 +254,7 @@ export function ProfileIdentification() {
     [addTag, createTag, runs, tagDict],
   )
 
-  const runSequential = useCallback(async () => {
+  const runConcurrent = useCallback(async () => {
     if (running) return
     if (!profiles.length) {
       toast.message('No recent profiles to process')
@@ -262,15 +264,27 @@ export function ProfileIdentification() {
     setRunning(true)
     setStopping(false)
 
-    for (const p of profiles) {
-      if (abortRef.current) break
+    // Build processing queue (skip already running/completed)
+    const queue = profiles.filter(p => {
       const runEntry = runs.get(p.profile_pk)
-      if (runEntry && (runEntry.status === 'completed' || runEntry.status === 'running')) {
-        continue // skip already processed or currently running
+      return !(runEntry && (runEntry.status === 'completed' || runEntry.status === 'running'))
+    })
+
+    let index = 0
+    const workerCount = Math.max(1, Math.min(concurrency, queue.length || 1))
+
+    const worker = async () => {
+      while (!abortRef.current) {
+        const currentIndex = index
+        if (currentIndex >= queue.length) break
+        index += 1
+        const profile = queue[currentIndex]
+        // eslint-disable-next-line no-await-in-loop
+        await classifyProfile(profile)
       }
-      // eslint-disable-next-line no-await-in-loop
-      await classifyProfile(p)
     }
+
+    await Promise.all(Array.from({ length: workerCount }, () => worker()))
 
     setRunning(false)
     setStopping(false)
@@ -279,7 +293,7 @@ export function ProfileIdentification() {
     } else {
       toast.success('Identification run completed')
     }
-  }, [classifyProfile, profiles, running, runs])
+  }, [classifyProfile, profiles, running, runs, concurrency])
 
   const stopSequential = () => {
     if (!running) return
@@ -353,6 +367,22 @@ export function ProfileIdentification() {
               onChange={e => setLimit(Math.min(500, Math.max(1, Number(e.target.value) || 1)))}
             />
           </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Concurrency</label>
+            <input
+              type="number"
+              className="border rounded px-2 py-1 text-sm w-24"
+              value={concurrency}
+              min={1}
+              max={16}
+              disabled={running}
+              onChange={e =>
+                setConcurrency(
+                  Math.min(16, Math.max(1, Number(e.target.value) || 1)),
+                )
+              }
+            />
+          </div>
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -366,7 +396,7 @@ export function ProfileIdentification() {
             {!running ? (
               <Button
                 size="sm"
-                onClick={runSequential}
+                onClick={runConcurrent}
                 disabled={recentLoading || !profiles.length || tagsLoading}
               >
                 <Play className="h-3 w-3 mr-1" />
@@ -400,7 +430,7 @@ export function ProfileIdentification() {
           <Badge variant="outline" className="bg-muted">
             Pending: {pendingCount}
           </Badge>
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
             Completed: {completedCount}
           </Badge>
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
@@ -408,6 +438,9 @@ export function ProfileIdentification() {
           </Badge>
           <Badge variant="outline">
             Window: {days}d
+          </Badge>
+          <Badge variant="outline">
+            Concurrency: {concurrency}
           </Badge>
         </div>
 
