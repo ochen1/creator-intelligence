@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { CampaignManager } from '@/components/CampaignManager'
-import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
+import { TagAnalyticsDashboard } from '@/components/TagAnalyticsDashboard'
 import { ProfileList } from '@/components/ProfileList'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { BulkProfilesAttributionSheet } from '@/components/BulkProfilesAttributionSheet'
@@ -44,7 +44,7 @@ export default function HomePage() {
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Analytics Dashboard</TabsTrigger>
+          <TabsTrigger value="overview">Tag Analytics</TabsTrigger>
           <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
           <TabsTrigger value="audience">Audience Management</TabsTrigger>
           <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
@@ -52,12 +52,12 @@ export default function HomePage() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Campaign Analytics Dashboard</h2>
+            <h2 className="text-2xl font-semibold">Tag Analytics Dashboard</h2>
             <p className="text-muted-foreground">
-              Comprehensive insights into your campaign performance, engagement metrics, and audience growth.
+              Analyze tag patterns and word clouds for followers vs churners to understand audience segments and engagement patterns.
             </p>
           </div>
-          <CampaignAnalyticsDashboard />
+          <TagAnalyticsDashboard />
         </TabsContent>
 
         <TabsContent value="campaigns" className="space-y-6">
