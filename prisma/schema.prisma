@@ -121,8 +121,9 @@ model Tag {
 }
 
 model ProfileTag {
-  profile_pk Int
-  tag_id     Int
+  profile_pk     Int
+  tag_id         Int
+  auto_assigned  Boolean @default(false) // Indicates if the tag was automatically inferred/assigned by the classifier
 
   profile Profile @relation(fields: [profile_pk], references: [profile_pk])
   tag     Tag     @relation(fields: [tag_id], references: [tag_id])

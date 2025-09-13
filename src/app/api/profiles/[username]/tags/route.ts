@@ -3,6 +3,7 @@ import { jsonError, jsonSuccess, safeJson } from '../../../../../lib/api'
 
 type ProfileTagBody = {
   tagId?: unknown
+  autoAssigned?: unknown // optional flag to mark the tag assignment as automatic/inferred
 }
 
 // POST /api/profiles/[username]/tags - Add a tag to a profile
@@ -28,6 +29,18 @@ export async function POST(
   const tagId = Number(body.tagId)
   if (!Number.isInteger(tagId) || tagId <= 0) {
     return jsonError('tagId must be a positive integer')
+  }
+
+  // Normalize autoAssigned flag (default false)
+  let autoAssigned = false
+  if (Object.prototype.hasOwnProperty.call(body, 'autoAssigned')) {
+    // Accept boolean true or string 'true'
+    const raw = (body as any).autoAssigned
+    if (raw === true || raw === 'true') {
+      autoAssigned = true
+    } else if (!(raw === false || raw === 'false' || raw == null)) {
+      return jsonError('autoAssigned must be a boolean if provided')
+    }
   }
 
   try {
@@ -70,6 +83,8 @@ export async function POST(
       data: {
         profile_pk: profile.profile_pk,
         tag_id: tagId,
+        // @ts-ignore Prisma Client may need regeneration after adding auto_assigned column
+        auto_assigned: autoAssigned,
       },
       include: {
         tag: true,

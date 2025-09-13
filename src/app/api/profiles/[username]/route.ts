@@ -30,8 +30,10 @@ export async function GET(
             },
           },
         },
+        // Include auto_assigned flag on profile tag pivot
         tags: {
-          include: {
+          select: {
+            auto_assigned: true,
             tag: true,
           },
         },

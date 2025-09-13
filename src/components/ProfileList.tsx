@@ -134,7 +134,13 @@ function TagsCell({ profile }: { profile: Profile }) {
   const { data: allTags } = useTags()
   const { addTag, removeTag } = useProfileTagMutations()
 
-  const profileTags = profile.tags?.map(pt => pt.tag) || []
+  // Bring auto_assigned flag forward from pivot
+  const profileTags = (profile.tags?.map(pt => ({
+    tag_id: pt.tag.tag_id,
+    tag_name: pt.tag.tag_name,
+    auto_assigned: pt.auto_assigned ?? false,
+  })) || [])
+
   const availableTags = allTags?.filter(tag =>
     !profileTags.some(pt => pt.tag_id === tag.tag_id)
   ) || []
@@ -150,16 +156,31 @@ function TagsCell({ profile }: { profile: Profile }) {
   return (
     <div className="w-full max-w-[250px]" onClick={(e) => e.stopPropagation()}>
       <div className="flex flex-wrap gap-1">
-        {profileTags.map((tag) => (
-          <TagChip
-            key={tag.tag_id}
-            size="sm"
-            onRemove={() => handleRemoveTag(tag.tag_id)}
-            disabled={removeTag.isPending}
-          >
-            {tag.tag_name}
-          </TagChip>
-        ))}
+        {profileTags.map((tag) => {
+          const isAuto = tag.auto_assigned
+          return (
+            <TagChip
+              key={tag.tag_id}
+              size="sm"
+              variant={isAuto ? 'outline' : 'secondary'}
+              onRemove={() => handleRemoveTag(tag.tag_id)}
+              disabled={removeTag.isPending}
+              className={isAuto ? 'border-dashed' : undefined}
+            >
+              <span
+                title={
+                  isAuto
+                    ? 'Automatically inferred tag (classifier)'
+                    : 'Manually assigned tag'
+                }
+                className="flex items-center gap-0.5"
+              >
+                {tag.tag_name}
+                {isAuto && <span className="text-[9px] leading-none text-muted-foreground">*</span>}
+              </span>
+            </TagChip>
+          )
+        })}
         {availableTags.length > 0 && (
           <TagSelector
             availableTags={availableTags}

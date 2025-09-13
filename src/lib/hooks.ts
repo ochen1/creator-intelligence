@@ -22,8 +22,38 @@ export type Profile = {
   is_currently_following?: boolean
   is_pending_outbound_request?: boolean
   notes?: string | null
-  tags?: { tag: { tag_id: number; tag_name: string } }[]
+  // tags pivot now returns auto_assigned flag
+  tags?: { auto_assigned?: boolean; tag: { tag_id: number; tag_name: string } }[]
   interaction_events?: InteractionEvent[]
+}
+
+/**
+ * RecentProfile returned by /api/profiles/recent
+ * last_event is a simplified single latest event within the lookback window.
+ */
+export type RecentProfile = {
+  profile_pk: number
+  current_username: string
+  first_seen_ts: string
+  tags: { auto_assigned?: boolean; tag: { tag_id: number; tag_name: string } }[]
+  last_event: {
+    event_id: number
+    event_type: string
+    event_ts: string
+    attribution: {
+      reason: string
+      campaign: { campaign_id: number; campaign_name: string } | null
+    } | null
+  } | null
+}
+
+export type RecentProfilesResponse = {
+  data: RecentProfile[]
+  summary: {
+    window_days: number
+    cutoff_iso: string
+    profile_count: number
+  }
 }
 
 export type InteractionEvent = {
@@ -164,6 +194,18 @@ export const api = {
     return response.data || []
   },
 
+  // Recent Profiles (for identification workflow)
+  fetchRecentProfiles: async (params: { days?: number; limit?: number } = {}): Promise<RecentProfilesResponse> => {
+    const sp = new URLSearchParams()
+    if (params.days != null) sp.set('days', String(params.days))
+    if (params.limit != null) sp.set('limit', String(params.limit))
+    const qs = sp.toString()
+    const res = await fetch(`/api/profiles/recent${qs ? `?${qs}` : ''}`)
+    if (!res.ok) throw new Error('Failed to fetch recent profiles')
+    const response = await res.json()
+    return response.data || { data: [], summary: { window_days: params.days || 30, cutoff_iso: '', profile_count: 0 } }
+  },
+
   createTag: async (tagName: string): Promise<Tag> => {
     const res = await fetch('/api/tags', {
       method: 'POST',
@@ -192,11 +234,20 @@ export const api = {
   },
 
   // Profile Tags
-  addTagToProfile: async (username: string, tagId: number) => {
+  // Supports optional autoAssigned flag for machine-generated labels
+  addTagToProfile: async (
+    username: string,
+    tagId: number,
+    options?: { autoAssigned?: boolean }
+  ) => {
+    const payload: any = { tagId }
+    if (options?.autoAssigned) {
+      payload.autoAssigned = true
+    }
     const res = await fetch(`/api/profiles/${encodeURIComponent(username)}/tags`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tagId })
+      body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error('Failed to add tag to profile')
     const response = await res.json()
@@ -240,6 +291,13 @@ export function useTags() {
   return useQuery({
     queryKey: ['tags'],
     queryFn: api.fetchTags
+  })
+}
+
+export function useRecentProfiles(params: { days?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: ['recent-profiles', params],
+    queryFn: () => api.fetchRecentProfiles(params)
   })
 }
 
@@ -371,8 +429,8 @@ export function useProfileTagMutations() {
   const queryClient = useQueryClient()
 
   const addTag = useMutation({
-    mutationFn: ({ username, tagId }: { username: string; tagId: number }) =>
-      api.addTagToProfile(username, tagId),
+    mutationFn: ({ username, tagId, autoAssigned }: { username: string; tagId: number; autoAssigned?: boolean }) =>
+      api.addTagToProfile(username, tagId, { autoAssigned }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       queryClient.invalidateQueries({ queryKey: ['profile'] })

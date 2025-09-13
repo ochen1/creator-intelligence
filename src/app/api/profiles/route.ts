@@ -105,7 +105,8 @@ export async function GET(request: Request) {
         is_currently_following: true,
         is_pending_outbound_request: true,
         tags: {
-          include: {
+          select: {
+            auto_assigned: true,
             tag: true,
           },
         },

@@ -6,6 +6,7 @@ import { ProfileList } from '@/components/ProfileList'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { BulkProfilesAttributionSheet } from '@/components/BulkProfilesAttributionSheet'
 import { DataIngestion } from '@/components/DataIngestion'
+import { ProfileIdentification } from '@/components/ProfileIdentification'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +33,9 @@ export default function HomePage() {
       {/* Data Ingestion */}
       <DataIngestion />
 
+      {/* Profile Identification */}
+      <ProfileIdentification />
+      
       <Separator />
 
       {/* Campaign Management */}
