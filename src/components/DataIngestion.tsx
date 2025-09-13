@@ -17,6 +17,8 @@ interface ProcessedFile {
   error?: string
   startTime?: number
   endTime?: number
+  // added: effective snapshot timestamp (ms) used to order imports and send to API
+  snapshotTime?: number
 }
 
 interface IngestionResult {
@@ -33,6 +35,62 @@ export function DataIngestion() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const generateFileId = (file: File) => `${file.name}-${file.size}-${file.lastModified}`
+
+  // Helper: parse YYYY-MM-DD from filename (e.g., instagram-user-2025-06-13-ABC.zip)
+  const parseDateFromFilename = (filename: string): number | undefined => {
+    const match = filename.match(/(\d{4}-\d{2}-\d{2})/)
+    if (!match) return undefined
+    const d = new Date(match[1] + 'T00:00:00Z')
+    if (isNaN(d.getTime())) return undefined
+    return d.getTime()
+  }
+
+  // Helper: inspect ZIP internals to find stored timestamps for required files.
+  // Returns the latest internal file timestamp in ms, or undefined if none found.
+  const getInnerLatestTimestamp = async (file: File): Promise<number | undefined> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+      const zipContents = await zip.loadAsync(arrayBuffer)
+
+      const paths = [
+        'connections/followers_and_following/followers_1.json',
+        'connections/followers_and_following/following.json',
+        'connections/followers_and_following/pending_follow_requests.json',
+      ]
+
+      const candidateDates: number[] = []
+      for (const path of paths) {
+        let zipFile = zipContents.file(path)
+        if (!zipFile) {
+          const allFiles = Object.keys(zipContents.files)
+          const matchingFile = allFiles.find(fn => fn.endsWith(path) || fn.includes(path.replace('connections/', '')))
+          if (matchingFile) zipFile = zipContents.file(matchingFile)
+        }
+        if (zipFile && zipFile.date) {
+          candidateDates.push(zipFile.date.getTime())
+        }
+      }
+
+      if (candidateDates.length === 0) return undefined
+      return Math.max(...candidateDates)
+    } catch {
+      return undefined
+    }
+  }
+
+  // Determine the "effective" timestamp for ordering and ingestion:
+  // Prefer internal ZIP timestamp if >= year 2010, otherwise fall back to the filename date.
+  const getEffectiveTimestamp = async (file: File): Promise<number | undefined> => {
+    const cutoff = new Date('2010-01-01T00:00:00Z').getTime()
+    const inner = await getInnerLatestTimestamp(file)
+    if (inner && inner >= cutoff) return inner
+    const parsed = parseDateFromFilename(file.name)
+    if (parsed) return parsed
+    // If we have an inner timestamp even if < 2010, still return it as last resort
+    return inner
+  }
 
   const processFile = async (processedFile: ProcessedFile) => {
     const { file } = processedFile
@@ -78,14 +136,36 @@ export function DataIngestion() {
         return { text, dateMs }
       }
 
+      // Extract all required texts and collect inner timestamps
       const followers1 = await extractFile('connections/followers_and_following/followers_1.json')
       const following = await extractFile('connections/followers_and_following/following.json')
       const pending = await extractFile('connections/followers_and_following/pending_follow_requests.json')
 
-      // Determine a ZIP-internal timestamp to send to the server.
-      // Use the latest stored timestamp among the required files when available.
+      // Determine candidate internal timestamp & apply the "reasonable" rule
       const candidateDates = [followers1.dateMs, following.dateMs, pending.dateMs].filter(d => typeof d === 'number') as number[]
       const innerFileLastModified = candidateDates.length > 0 ? Math.max(...candidateDates) : undefined
+      const cutoff = new Date('2010-01-01T00:00:00Z').getTime()
+
+      // Prefer a precomputed snapshotTime on the processedFile (computed during addFiles),
+      // otherwise apply the same reasoning here.
+      let finalTimestamp = processedFile.snapshotTime
+      if (!finalTimestamp) {
+        if (innerFileLastModified && innerFileLastModified >= cutoff) {
+          finalTimestamp = innerFileLastModified
+        } else {
+          // Try parse from filename as fallback
+          const parsed = ((): number | undefined => {
+            const match = file.name.match(/(\d{4}-\d{2}-\d{2})/)
+            if (!match) return undefined
+            const d = new Date(match[1] + 'T00:00:00Z')
+            if (isNaN(d.getTime())) return undefined
+            return d.getTime()
+          })()
+          finalTimestamp = parsed ?? innerFileLastModified
+        }
+      }
+
+      const snapshotDateStr = finalTimestamp ? new Date(finalTimestamp).toISOString().slice(0,10) : undefined
 
       // Send to ingestion API (use inner-file timestamp if present)
       const response = await fetch('/api/ingest', {
@@ -98,7 +178,9 @@ export function DataIngestion() {
           following_json: following.text,
           pending_follow_requests_json: pending.text,
           original_zip_filename: file.name,
-          file_last_modified: innerFileLastModified, // <-- use timestamp from inside ZIP
+          // send the chosen timestamp (ms) and also a snapshot_date (YYYY-MM-DD) when available
+          file_last_modified: finalTimestamp,
+          snapshot_date: snapshotDateStr,
         }),
       })
 
@@ -164,6 +246,21 @@ export function DataIngestion() {
     }
 
     if (newFilesToAdd.length === 0) return
+
+    // Compute effective snapshot timestamps for new files (in parallel),
+    // so we can sort and import oldest -> newest.
+    const timestampPromises = newFilesToAdd.map(pf => getEffectiveTimestamp(pf.file))
+    const timestamps = await Promise.all(timestampPromises)
+    for (let i = 0; i < newFilesToAdd.length; i++) {
+      newFilesToAdd[i].snapshotTime = timestamps[i]
+    }
+
+    // Sort by snapshotTime ascending (oldest first). Files without a timestamp go last.
+    newFilesToAdd.sort((a, b) => {
+      const ta = a.snapshotTime ?? Number.MAX_SAFE_INTEGER
+      const tb = b.snapshotTime ?? Number.MAX_SAFE_INTEGER
+      return ta - tb
+    })
 
     // Add files to state
     setFiles(prev => [...prev, ...newFilesToAdd])
