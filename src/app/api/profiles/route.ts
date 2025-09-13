@@ -78,31 +78,126 @@ export async function GET(request: Request) {
         break
     }
 
-    const skip = (page - 1) * pageSize
+    // We need to sort by:
+    // 1) Last interaction timestamp (desc, nulls last)
+    // 2) first_seen_ts (desc)
+    // 3) current_username (asc)
+    //
+    // Prisma cannot directly order by related record's max(event_ts) while also selecting only first event,
+    // so we:
+    //  - Fetch all matching profiles (unpaginated)
+    //  - Fetch all interaction events for those profiles ordered by event_ts desc
+    //  - Build a map of latest event per profile
+    //  - Attach a synthetic interaction_events:[{event_type,event_ts}] to each profile (frontend expects this shape)
+    //  - Sort in memory using required precedence
+    //  - Paginate the sorted list
+    //
+    // NOTE: For large datasets, optimize with a materialized last_event_ts column or a raw SQL aggregation.
 
-    const [total, profiles] = await Promise.all([
-      prisma.profile.count({ where }),
-      prisma.profile.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { profile_pk: 'asc' },
+    const allProfiles = await prisma.profile.findMany({
+      where,
+      select: {
+        profile_pk: true,
+        current_username: true,
+        first_seen_ts: true,
+        notes: true,
+        is_active_follower: true,
+        is_currently_following: true,
+        is_pending_outbound_request: true,
+      },
+    })
+
+    const total = allProfiles.length
+
+    let latestEventsMap = new Map<number, { event_type: string; event_ts: string; attribution?: { reason: string | null; campaign_name?: string | null } }>()
+
+    if (total > 0) {
+      const profileIds = allProfiles.map(p => p.profile_pk)
+      const events = await prisma.interactionEvent.findMany({
+        where: { profile_pk: { in: profileIds } },
+        orderBy: { event_ts: 'desc' },
         select: {
           profile_pk: true,
-          current_username: true,
-          first_seen_ts: true,
-          notes: true,
-          is_active_follower: true,
-          is_currently_following: true,
-          is_pending_outbound_request: true,
+          event_type: true,
+          event_ts: true,
+          attribution: {
+            select: {
+              reason: true,
+              campaign: {
+                select: {
+                  campaign_name: true,
+                },
+              },
+            },
+          },
         },
-      }),
-    ])
+      })
+
+      for (const ev of events) {
+        if (!latestEventsMap.has(ev.profile_pk)) {
+          latestEventsMap.set(ev.profile_pk, {
+            event_type: ev.event_type,
+            event_ts: ev.event_ts.toISOString(),
+            attribution: ev.attribution
+              ? {
+                  reason: ev.attribution.reason,
+                  campaign_name: ev.attribution.campaign?.campaign_name || null,
+                }
+              : undefined,
+          })
+        }
+      }
+    }
+
+    const enriched = allProfiles.map(p => {
+      const latest = latestEventsMap.get(p.profile_pk)
+      return {
+        ...p,
+        interaction_events: latest
+          ? [{
+              event_type: latest.event_type,
+              event_ts: latest.event_ts,
+              attribution: latest.attribution
+                ? {
+                    reason: latest.attribution.reason,
+                    campaign: latest.attribution.campaign_name
+                      ? { campaign_name: latest.attribution.campaign_name }
+                      : null,
+                  }
+                : null,
+            }]
+          : [],
+      }
+    })
+
+    enriched.sort((a, b) => {
+      const aEvt = a.interaction_events[0]?.event_ts
+      const bEvt = b.interaction_events[0]?.event_ts
+
+      if (aEvt && bEvt) {
+        if (aEvt > bEvt) return -1
+        if (aEvt < bEvt) return 1
+      } else if (aEvt && !bEvt) {
+        return -1
+      } else if (!aEvt && bEvt) {
+        return 1
+      }
+
+      if (a.first_seen_ts > b.first_seen_ts) return -1
+      if (a.first_seen_ts < b.first_seen_ts) return 1
+
+      if (a.current_username < b.current_username) return -1
+      if (a.current_username > b.current_username) return 1
+      return 0
+    })
+
+    const start = (page - 1) * pageSize
+    const paged = enriched.slice(start, start + pageSize)
 
     const paginationData = paginationMeta(page, pageSize, total)
-    
+
     return jsonSuccess({
-      data: profiles,
+      data: paged,
       total,
       page,
       pageSize,

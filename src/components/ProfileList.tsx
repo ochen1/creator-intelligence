@@ -161,6 +161,20 @@ export function ProfileList({
     { key: 'none', label: 'No Connection' }
   ]
 
+  // Map backend event_type codes to human readable labels for the Last Interaction column
+  function formatEventType(eventType: string | undefined): string {
+    if (!eventType) return '—'
+    switch (eventType) {
+      case 'FOLLOWED_ME': return 'Followed Me'
+      case 'UNFOLLOWED_ME': return 'Unfollowed Me'
+      case 'I_FOLLOWED': return 'I Followed'
+      case 'I_UNFOLLOWED': return 'I Unfollowed'
+      case 'FOLLOW_REQUEST_SENT': return 'Follow Request Sent'
+      case 'PENDING_REQUEST_CANCELLED': return 'Request Cancelled'
+      default: return eventType
+    }
+  }
+
   // Get status badge for profile
   const getStatusBadge = (profile: Profile) => {
     const isFollower = profile.is_active_follower
@@ -323,17 +337,19 @@ export function ProfileList({
                   )}
                   <TableHead>Username</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Last Interaction Reason</TableHead>
+                  <TableHead>Last Interaction At</TableHead>
                   <TableHead>First Seen</TableHead>
                   <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {profiles.length === 0 ? (
-                  <TableRow>
-                    <TableCell 
-                      colSpan={onSelectionChange ? 5 : 4} 
-                      className="h-24 text-center text-muted-foreground"
-                    >
+                 <TableRow>
+                   <TableCell
+                     colSpan={onSelectionChange ? 7 : 6}
+                     className="h-24 text-center text-muted-foreground"
+                   >
                       <div className="flex flex-col items-center justify-center py-4">
                         <Search className="h-8 w-8 mb-2 text-muted-foreground" />
                         <p>No profiles found</p>
@@ -371,6 +387,19 @@ export function ProfileList({
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(profile)}
+                      </TableCell>
+                      <TableCell>
+                        {profile.interaction_events?.[0]?.attribution?.reason
+                          ? profile.interaction_events[0].attribution.reason +
+                            (profile.interaction_events[0].attribution.campaign?.campaign_name
+                              ? ` (${profile.interaction_events[0].attribution.campaign.campaign_name})`
+                              : '')
+                          : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {profile.interaction_events?.[0]?.event_ts
+                          ? formatDate(profile.interaction_events[0].event_ts, 'datetime')
+                          : '—'}
                       </TableCell>
                       <TableCell>
                         {formatDate(profile.first_seen_ts, 'date')}
