@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { TagChip } from '@/components/ui/TagChip'
 import { TagSelector } from '@/components/ui/TagSelector'
 import { TagsManagerSheet } from '@/components/TagsManagerSheet'
+import { BulkTagsSheet } from '@/components/BulkTagsSheet'
 import { useProfiles, useTags, useProfileTagMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
 import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X, Hash } from 'lucide-react'
@@ -21,6 +22,7 @@ interface ProfileListProps {
   onSelectProfile: (username: string) => void
   selectedProfilePks?: number[]
   onSelectionChange?: (profilePks: number[]) => void
+  onBulkAttribution?: () => void
 }
 
 // API function for updating profile notes
@@ -177,7 +179,8 @@ function TagsCell({ profile }: { profile: Profile }) {
 export function ProfileList({
   onSelectProfile,
   selectedProfilePks = [],
-  onSelectionChange
+  onSelectionChange,
+  onBulkAttribution
 }: ProfileListProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -560,6 +563,59 @@ export function ProfileList({
           </div>
         )}
       </CardContent>
+
+      {/* Floating Island for Multi-Select Actions */}
+      {selectedProfilePks.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="rounded-full border bg-background/95 supports-[backdrop-filter]:bg-background/70 backdrop-blur px-4 py-3 shadow-lg flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {selectedProfilePks.length} selected
+              </Badge>
+            </div>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <BulkTagsSheet profilePks={selectedProfilePks} />
+              {onBulkAttribution && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onBulkAttribution}
+                >
+                  Bulk Attribution
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Export functionality
+                  const selectedProfiles = profiles.filter(p => selectedProfilePks.includes(p.profile_pk));
+                  const csvData = selectedProfiles.map(p =>
+                    `${p.current_username},${p.is_active_follower ? 'Follower' : 'Not Following'}`
+                  ).join('\n');
+                  const blob = new Blob([`Username,Status\n${csvData}`], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `selected-profiles-${selectedProfilePks.length}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Export
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onSelectionChange?.([])}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   )
 }

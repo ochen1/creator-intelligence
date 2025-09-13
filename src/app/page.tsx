@@ -43,33 +43,13 @@ export default function HomePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-semibold">Audience Management</h2>
-          {selectedProfilePks.length > 0 && (
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="text-sm">
-                {selectedProfilePks.length} profiles selected
-              </Badge>
-              <Button
-                size="sm"
-                onClick={() => setBulkAttributionOpen(true)}
-                disabled={selectedProfilePks.length === 0}
-              >
-                Bulk Attribution
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={clearSelection}
-              >
-                Clear Selection
-              </Button>
-            </div>
-          )}
         </div>
 
         <ProfileList
           onSelectProfile={(username) => setSelectedUsername(username)}
           selectedProfilePks={selectedProfilePks}
           onSelectionChange={setSelectedProfilePks}
+          onBulkAttribution={() => setBulkAttributionOpen(true)}
         />
       </div>
 
