@@ -15,7 +15,7 @@ import { BulkTagsSheet } from '@/components/BulkTagsSheet'
 import { useProfiles, useTags, useProfileTagMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
 import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X, Hash } from 'lucide-react'
-import type { Profile } from '@/lib/hooks'
+import type { Profile, Tag } from '@/lib/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 interface ProfileListProps {
@@ -192,7 +192,12 @@ export function ProfileList({
   // Capture whether the pointer interaction that will trigger onCheckedChange had Shift pressed.
   const pointerShiftRef = useRef<boolean | null>(null)
 
-  const { data: allTags } = useTags()
+  const { data: rawTags } = useTags()
+  const allTags = useMemo<Tag[]>(() => {
+    if (Array.isArray(rawTags)) return rawTags as Tag[]
+    if (rawTags && Array.isArray((rawTags as any).data)) return (rawTags as any).data as Tag[]
+    return []
+  }, [rawTags])
   const { data: profilesResponse, isLoading, isError, error } = useProfiles({
     status: statusFilter === 'all' ? undefined : statusFilter,
     search: searchQuery || undefined,

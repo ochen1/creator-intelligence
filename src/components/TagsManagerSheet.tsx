@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,10 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Pencil, Trash2, Check, X, Tags, Plus, Hash } from 'lucide-react'
-import { useTags, useTagMutations } from '@/lib/hooks'
+import { useTags, useTagMutations, type Tag } from '@/lib/hooks'
 
 export function TagsManagerSheet() {
-  const { data: tags, isLoading, isError, error } = useTags()
+  const { data: rawTags, isLoading, isError, error } = useTags()
+  const tags = useMemo<Tag[]>(() => {
+    if (Array.isArray(rawTags)) return rawTags as Tag[]
+    if (rawTags && Array.isArray((rawTags as any).data)) return (rawTags as any).data as Tag[]
+    return []
+  }, [rawTags])
   const { create, update, remove } = useTagMutations()
   
   const [newTagName, setNewTagName] = useState('')
