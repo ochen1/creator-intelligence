@@ -369,9 +369,22 @@ export async function POST(request: Request) {
 
       // Persist events
       if (eventCreates.length > 0) {
-        await tx.interactionEvent.createMany({
-          data: eventCreates,
-        })
+        // Deduplicate events by (profile_pk, event_type), keeping the latest event_ts.
+        // This prevents inserting repeated identical events during the same ingest run.
+        const dedupMap = new Map<string, { profile_pk: number; event_type: EventType; event_ts: Date }>()
+        for (const e of eventCreates) {
+          const key = `${e.profile_pk}|${e.event_type}`
+          const existing = dedupMap.get(key)
+          if (!existing || e.event_ts.getTime() > existing.event_ts.getTime()) {
+            dedupMap.set(key, e)
+          }
+        }
+        const dedupedEvents = Array.from(dedupMap.values())
+        if (dedupedEvents.length > 0) {
+          await tx.interactionEvent.createMany({
+            data: dedupedEvents,
+          })
+        }
       }
 
       // Persist profile flag updates in batches to avoid timeout
