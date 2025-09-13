@@ -40,42 +40,75 @@ interface RelationshipsWrapper {
   relationships_follow_requests_sent?: RawFollowerEntry[]
 }
 
-function parseFollowers1(raw: string): string[] {
+/**
+ * New behavior:
+ * - Each parser returns a Map<username, timestampMs | null>
+ * - If multiple entries exist for the same username the latest timestamp is used.
+ */
+function parseFollowers1(raw: string): Map<string, number | null> {
   const arr = JSON.parse(raw) as RawFollowerEntry[]
-  const usernames: string[] = []
+  const map = new Map<string, number | null>()
   for (const entry of arr) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value) {
+        const uname = s.value.trim()
+        const tsMs = typeof s.timestamp === 'number' ? s.timestamp * 1000 : null
+        const existing = map.get(uname) ?? null
+        if (tsMs && existing) {
+          if (tsMs > existing) map.set(uname, tsMs)
+        } else {
+          // set either tsMs (may be null) or existing (if present)
+          map.set(uname, tsMs ?? (existing ?? null))
+        }
+      }
     }
   }
-  return usernames
+  return map
 }
 
-function parseFollowing(raw: string): string[] {
+function parseFollowing(raw: string): Map<string, number | null> {
   const obj = JSON.parse(raw) as RelationshipsWrapper
   const list = obj.relationships_following || []
-  const usernames: string[] = []
+  const map = new Map<string, number | null>()
   for (const entry of list) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value) {
+        const uname = s.value.trim()
+        const tsMs = typeof s.timestamp === 'number' ? s.timestamp * 1000 : null
+        const existing = map.get(uname) ?? null
+        if (tsMs && existing) {
+          if (tsMs > existing) map.set(uname, tsMs)
+        } else {
+          map.set(uname, tsMs ?? (existing ?? null))
+        }
+      }
     }
   }
-  return usernames
+  return map
 }
 
-function parsePending(raw: string): string[] {
+function parsePending(raw: string): Map<string, number | null> {
   const obj = JSON.parse(raw) as RelationshipsWrapper
   const list = obj.relationships_follow_requests_sent || []
-  const usernames: string[] = []
+  const map = new Map<string, number | null>()
   for (const entry of list) {
     const items = entry.string_list_data || []
     for (const s of items) {
-      if (s?.value) usernames.push(s.value)
+      if (s?.value) {
+        const uname = s.value.trim()
+        const tsMs = typeof s.timestamp === 'number' ? s.timestamp * 1000 : null
+        const existing = map.get(uname) ?? null
+        if (tsMs && existing) {
+          if (tsMs > existing) map.set(uname, tsMs)
+        } else {
+          map.set(uname, tsMs ?? (existing ?? null))
+        }
+      }
     }
   }
-  return usernames
+  return map
 }
 
 export async function POST(request: Request) {
@@ -123,19 +156,24 @@ export async function POST(request: Request) {
     }
 
     // Step 3: Data Parsing
-    let followers: string[] = []
-    let following: string[] = []
-    let pending: string[] = []
+    let followersMap = new Map<string, number | null>()
+    let followingMap = new Map<string, number | null>()
+    let pendingMap = new Map<string, number | null>()
 
     try {
-      followers = parseFollowers1(followers_1_json)
-      following = parseFollowing(following_json)
-      pending = parsePending(pending_follow_requests_json)
+      followersMap = parseFollowers1(followers_1_json)
+      followingMap = parseFollowing(following_json)
+      pendingMap = parsePending(pending_follow_requests_json)
     } catch (err: any) {
       return jsonError('Failed to parse one of the JSON payloads', 400, {
         detail: err?.message,
       })
     }
+
+    // Build username arrays from map keys
+    let followers = Array.from(followersMap.keys())
+    let following = Array.from(followingMap.keys())
+    let pending = Array.from(pendingMap.keys())
 
     // Normalize usernames (trim, lower?) - assuming case-sensitive handle, we just trim.
     const norm = (u: string) => u.trim()
@@ -147,6 +185,24 @@ export async function POST(request: Request) {
     const allUsernames = Array.from(
       new Set([...followers, ...following, ...pending]),
     )
+
+    // Helper: determine a sane timestamp (Date) from ms or null
+    const now = new Date()
+    const earliestSane = new Date('2010-01-01').getTime()
+    const latestSane = now.getTime() + 24 * 3600 * 1000 // allow 1 day future slack
+
+    function getSaneDateFromMs(ms: number | null | undefined): Date | null {
+      if (!ms) return null
+      if (ms >= earliestSane && ms <= latestSane) return new Date(ms)
+      return null
+    }
+
+    const snapshotDateObj = (() => {
+      // Use snapshot date (YYYY-MM-DD) as fallback timestamp for absence-driven events
+      const d = new Date(snapshotDate)
+      if (!isNaN(d.getTime())) return d
+      return null
+    })()
 
     // Step 4-9 Transaction with extended timeout
     const resultSummary = await prisma.$transaction(async (tx) => {
@@ -206,8 +262,6 @@ export async function POST(request: Request) {
         }
       }[] = []
 
-      const now = new Date()
-
       // Utility to schedule update merges
       function scheduleFlagUpdate(
         profile_pk: number,
@@ -234,20 +288,32 @@ export async function POST(request: Request) {
       for (const p of relevantProfiles) {
         const username = p.current_username
 
+        // Determine per-event timestamp helpers:
+        // - For presence-driven events, prefer JSON timestamp for that category
+        // - For absence-driven events, fall back to snapshotDateObj then now
+        function tsForPresence(categoryMap: Map<string, number | null> | undefined) {
+          const ms = categoryMap?.get(username) ?? null
+          const sane = getSaneDateFromMs(ms)
+          return sane ?? snapshotDateObj ?? now
+        }
+        function tsForAbsence() {
+          return snapshotDateObj ?? now
+        }
+
         // FR-1.3.1: Inbound Followers
         const isNowFollower = followersSet.has(username)
         if (isNowFollower && !p.is_active_follower) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'FOLLOWED_ME',
-            event_ts: now,
+            event_ts: tsForPresence(followersMap),
           })
           scheduleFlagUpdate(p.profile_pk, { is_active_follower: true })
         } else if (!isNowFollower && p.is_active_follower) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'UNFOLLOWED_ME',
-            event_ts: now,
+            event_ts: tsForAbsence(),
           })
           scheduleFlagUpdate(p.profile_pk, { is_active_follower: false })
         }
@@ -258,7 +324,7 @@ export async function POST(request: Request) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'I_FOLLOWED',
-            event_ts: now,
+            event_ts: tsForPresence(followingMap),
           })
           scheduleFlagUpdate(p.profile_pk, {
             is_currently_following: true,
@@ -268,7 +334,7 @@ export async function POST(request: Request) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'I_UNFOLLOWED',
-            event_ts: now,
+            event_ts: tsForAbsence(),
           })
           scheduleFlagUpdate(p.profile_pk, { is_currently_following: false })
         }
@@ -279,7 +345,7 @@ export async function POST(request: Request) {
           eventCreates.push({
             profile_pk: p.profile_pk,
             event_type: 'FOLLOW_REQUEST_SENT',
-            event_ts: now,
+            event_ts: tsForPresence(pendingMap),
           })
           scheduleFlagUpdate(p.profile_pk, {
             is_pending_outbound_request: true,
@@ -293,7 +359,7 @@ export async function POST(request: Request) {
             eventCreates.push({
               profile_pk: p.profile_pk,
               event_type: 'PENDING_REQUEST_CANCELLED',
-              event_ts: now,
+              event_ts: tsForAbsence(),
             })
             scheduleFlagUpdate(p.profile_pk, {
               is_pending_outbound_request: false,
