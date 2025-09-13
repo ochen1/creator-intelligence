@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
 
 export default function HomePage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
@@ -57,6 +58,7 @@ export default function HomePage() {
               Analyze tag patterns and word clouds for followers vs churners to understand audience segments and engagement patterns.
             </p>
           </div>
+          <CampaignAnalyticsDashboard />
           <TagAnalyticsDashboard />
         </TabsContent>
 
