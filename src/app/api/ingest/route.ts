@@ -32,21 +32,38 @@ function extractDateFromFilename(name: string): string | null {
 }
 
 /**
- * Determine snapshot date according to FR-1.2:
+ * Determine snapshot timestamp according to FR-1.2:
  * 1. If file modification time is reasonable (after 2010), use that
- * 2. Otherwise, parse date from filename
+ * 2. Otherwise, parse date from filename and use start of day
  */
-function determineSnapshotDate(filename: string, fileLastModified?: number): string | null {
+function determineSnapshotTimestamp(filename: string, fileLastModified?: number): Date | null {
   const earliestSane = new Date('2010-01-01').getTime()
   
   // First priority: file modification time if reasonable
   if (fileLastModified && fileLastModified >= earliestSane) {
-    const date = new Date(fileLastModified)
-    return date.toISOString().split('T')[0] // YYYY-MM-DD format
+    return new Date(fileLastModified)
   }
   
-  // Second priority: parse from filename
-  return extractDateFromFilename(filename)
+  // Second priority: parse from filename and use start of day
+  const dateStr = extractDateFromFilename(filename)
+  if (dateStr) {
+    const date = new Date(dateStr)
+    if (!isNaN(date.getTime())) {
+      return date
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Create a unique identifier for this specific snapshot
+ * Use filename + timestamp to allow multiple exports from same day
+ */
+function createSnapshotKey(filename: string, timestamp: Date): string {
+  const dateStr = timestamp.toISOString().split('T')[0] // YYYY-MM-DD
+  const timeStr = timestamp.toISOString().replace(/[:.]/g, '-') // Safe for filename
+  return `${filename}_${timeStr}`
 }
 
 interface RawFollowerEntry {
@@ -154,9 +171,9 @@ export async function POST(request: Request) {
     )
   }
 
-  const snapshotDate = determineSnapshotDate(original_zip_filename, file_last_modified)
-  if (!snapshotDate) {
-    return jsonError('Could not determine snapshot date from file modification time or filename', 400, {
+  const snapshotTimestamp = determineSnapshotTimestamp(original_zip_filename, file_last_modified)
+  if (!snapshotTimestamp) {
+    return jsonError('Could not determine snapshot timestamp from file modification time or filename', 400, {
       filename: original_zip_filename,
       file_last_modified,
     })
@@ -165,13 +182,16 @@ export async function POST(request: Request) {
   try {
     // Step 2: Snapshot Check
     const existing = await prisma.snapshot.findUnique({
-      where: { snapshot_date: snapshotDate },
+      where: { snapshot_ts: snapshotTimestamp },
     })
     if (existing) {
       return jsonError(
-        'Snapshot for this date already processed',
+        'Snapshot for this timestamp already processed',
         409,
-        { snapshot_date: snapshotDate },
+        {
+          snapshot_ts: snapshotTimestamp.toISOString(),
+          original_filename: existing.original_filename,
+        },
       )
     }
 
@@ -216,17 +236,8 @@ export async function POST(request: Request) {
       return null
     }
 
-    // Determine snapshot date object for fallback timestamps
-    const snapshotDateObj = (() => {
-      // First try using file modification time if reasonable
-      if (file_last_modified && file_last_modified >= earliestSane) {
-        return new Date(file_last_modified)
-      }
-      // Otherwise use parsed snapshot date (YYYY-MM-DD)
-      const d = new Date(snapshotDate)
-      if (!isNaN(d.getTime())) return d
-      return null
-    })()
+    // Use the determined snapshot timestamp for fallback
+    const snapshotDateObj = snapshotTimestamp
 
     // Step 4-9 Transaction with extended timeout
     const resultSummary = await prisma.$transaction(async (tx) => {
@@ -319,14 +330,12 @@ export async function POST(request: Request) {
           const ms = categoryMap?.get(username) ?? null
           const sane = getSaneDateFromMs(ms)
           if (sane) return sane
-          if (snapshotDateObj) return snapshotDateObj
-          // Final fallback to parsed snapshot date
-          return new Date(snapshotDate!)
+          // Fallback to snapshot timestamp
+          return snapshotDateObj
         }
         function tsForAbsence() {
-          if (snapshotDateObj) return snapshotDateObj
-          // Final fallback to parsed snapshot date
-          return new Date(snapshotDate!)
+          // Use snapshot timestamp for absence-driven events
+          return snapshotDateObj
         }
 
         // FR-1.3.1: Inbound Followers
@@ -474,12 +483,15 @@ export async function POST(request: Request) {
       // Record snapshot
       await tx.snapshot.create({
         data: {
-          snapshot_date: snapshotDate,
+          snapshot_ts: snapshotTimestamp,
+          original_filename: original_zip_filename,
         },
       })
 
       return {
-        snapshot_date: snapshotDate,
+        snapshot_date: snapshotTimestamp.toISOString().split('T')[0], // For display compatibility
+        snapshot_ts: snapshotTimestamp.toISOString(),
+        original_filename: original_zip_filename,
         new_profiles: allUsernames.length,
         total_events_created: eventCreates.length,
         event_breakdown: eventCreates.reduce(
