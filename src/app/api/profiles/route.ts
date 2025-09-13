@@ -23,13 +23,15 @@ export async function GET(request: Request) {
     // Build base where clause
     const where: any = {}
 
-    // Search filter
+    // Search filter (SQLite does not support case-insensitive `mode` argument on string filters)
+    // NOTE: This will be case-sensitive. For true case-insensitive search we could:
+    //  - Add a lowercase shadow column and store lowercase usernames, OR
+    //  - Switch to a provider that supports `mode: 'insensitive'`.
     if (rawSearch) {
       where.OR = [
         {
           current_username: {
             contains: rawSearch,
-            mode: 'insensitive',
           },
         },
         {
@@ -37,7 +39,6 @@ export async function GET(request: Request) {
             some: {
               username: {
                 contains: rawSearch,
-                mode: 'insensitive',
               },
             },
           },
@@ -45,13 +46,20 @@ export async function GET(request: Request) {
       ]
     }
 
-    // Status filter mapping
+    // Status filter mapping (semantic definitions):
+    // follower  = they follow me AND I do NOT follow them back
+    // following = I follow them AND they do NOT follow me back
+    // mutual    = both follow each other
+    // pending   = I have an outstanding follow request
+    // none      = all flags false
     switch (rawStatus) {
       case 'follower':
         where.is_active_follower = true
+        where.is_currently_following = false
         break
       case 'following':
         where.is_currently_following = true
+        where.is_active_follower = false
         break
       case 'mutual':
         where.is_active_follower = true
@@ -61,14 +69,12 @@ export async function GET(request: Request) {
         where.is_pending_outbound_request = true
         break
       case 'none':
-        // None = all flags false
         where.is_active_follower = false
         where.is_currently_following = false
         where.is_pending_outbound_request = false
         break
       case 'all':
       default:
-        // No additional constraints
         break
     }
 

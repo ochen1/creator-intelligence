@@ -146,12 +146,18 @@ export function ProfileList({
   const total = profilesResponse?.total || 0
   const totalPages = profilesResponse?.totalPages || 1
 
-  // Status filter options
+  // Status filter semantics:
+  // follower  = they follow me AND I do NOT follow them back
+  // following = I follow them AND they do NOT follow me back
+  // mutual    = both follow each other
+  // pending   = I have an outstanding follow request
+  // none      = all flags false
   const statusOptions = [
     { key: 'all', label: 'All' },
     { key: 'follower', label: 'Followers' },
     { key: 'following', label: 'Following' },
     { key: 'mutual', label: 'Mutual' },
+    { key: 'pending', label: 'Pending' },
     { key: 'none', label: 'No Connection' }
   ]
 
