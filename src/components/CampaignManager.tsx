@@ -122,14 +122,18 @@ export function CampaignManager() {
                   <TableRow>
                     <TableHead>Campaign Name</TableHead>
                     {expandedCampaignId === null && (
-                      <TableHead className="w-[100px]">Actions</TableHead>
+                      <>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </>
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {campaigns.map((campaign) => (
                     <TableRow key={campaign.campaign_id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium w-full py-2">
                         <CampaignInsightsDropdown
                           campaignId={campaign.campaign_id}
                           campaignName={campaign.campaign_name}
@@ -137,22 +141,34 @@ export function CampaignManager() {
                             setExpandedCampaignId(isExpanded ? campaign.campaign_id : null)
                           }}
                         >
-                          <div className="flex items-center gap-2 hover:text-primary cursor-pointer">
+                          <div className="hover:text-primary cursor-pointer">
                             {campaign.campaign_name}
                           </div>
                         </CampaignInsightsDropdown>
                       </TableCell>
                       {expandedCampaignId === null && (
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteCampaign(campaign)}
-                            disabled={remove.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </TableCell>
+                        <>
+                          <TableCell>
+                            {formatDate(campaign.campaign_date, 'date')}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={campaign.campaign_type === 'CONTENT' ? 'default' : 'secondary'}
+                            >
+                              {campaign.campaign_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteCampaign(campaign)}
+                              disabled={remove.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </>
                       )}
                     </TableRow>
                   ))}

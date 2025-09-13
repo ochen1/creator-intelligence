@@ -343,17 +343,19 @@ export function CampaignInsightsDropdown({ campaignId, campaignName, children, o
   return (
     <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <CollapsibleTrigger asChild>
-        <div className="flex items-center gap-2 hover:text-primary cursor-pointer">
-          {children}
+        <div className="flex items-center justify-between w-full hover:text-primary cursor-pointer py-2">
+          <div className="flex items-center gap-2">
+            {children}
+          </div>
           <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`} />
         </div>
       </CollapsibleTrigger>
       
       <CollapsibleContent className="space-y-4 mt-4">
         <Card className="overflow-hidden max-w-full">
-          <CardHeader>
-            <CardTitle className="text-lg">{campaignName}</CardTitle>
-            <CardDescription>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-medium">{campaignName}</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">
               {campaign?.campaign_type} • {formatDate(campaign?.campaign_date || new Date(), 'date')}
             </CardDescription>
           </CardHeader>
