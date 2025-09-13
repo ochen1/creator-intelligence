@@ -21,7 +21,15 @@ export async function GET(request: Request) {
             include: {
               event: {
                 include: {
-                  profile: true
+                  profile: {
+                    include: {
+                      tags: {
+                        include: {
+                          tag: true
+                        }
+                      }
+                    }
+                  }
                 }
               }
             },
@@ -44,9 +52,18 @@ export async function GET(request: Request) {
       // Calculate metrics for this campaign
       const metrics = calculateCampaignMetrics(campaign)
       
+      // Calculate tag-based insights
+      const tagInsights = calculateTagInsights(campaign)
+      
       return jsonSuccess({
-        campaign,
+        campaign: {
+          campaign_id: campaign.campaign_id,
+          campaign_name: campaign.campaign_name,
+          campaign_date: campaign.campaign_date,
+          campaign_type: campaign.campaign_type
+        },
         metrics,
+        tagInsights,
         timeRange: { startDate, endDate, days: parseInt(dateRange) }
       })
     } else {
@@ -75,7 +92,7 @@ export async function GET(request: Request) {
       })
 
       // Calculate metrics for all campaigns
-      const campaignMetrics = campaigns.map(campaign => ({
+      const campaignMetrics = campaigns.map((campaign: any) => ({
         campaign_id: campaign.campaign_id,
         campaign_name: campaign.campaign_name,
         campaign_date: campaign.campaign_date,
@@ -84,12 +101,12 @@ export async function GET(request: Request) {
       }))
 
       // Calculate overall summary metrics
-      const totalAttributions = campaigns.reduce((sum, c) => sum + c.attributions.length, 0)
-      const totalFollowers = campaigns.reduce((sum, c) => {
-        return sum + c.attributions.filter(a => a.event.event_type === 'FOLLOWED_ME').length
+      const totalAttributions = campaigns.reduce((sum: number, c: any) => sum + c.attributions.length, 0)
+      const totalFollowers = campaigns.reduce((sum: number, c: any) => {
+        return sum + c.attributions.filter((a: any) => a.event.event_type === 'FOLLOWED_ME').length
       }, 0)
-      const totalUnfollowers = campaigns.reduce((sum, c) => {
-        return sum + c.attributions.filter(a => a.event.event_type === 'UNFOLLOWED_ME').length
+      const totalUnfollowers = campaigns.reduce((sum: number, c: any) => {
+        return sum + c.attributions.filter((a: any) => a.event.event_type === 'UNFOLLOWED_ME').length
       }, 0)
 
       const summary = {
@@ -178,4 +195,126 @@ function findPeakEngagementDay(dailyBreakdown: any[]) {
   return dailyBreakdown.reduce((peak, current) => 
     current.total > peak.total ? current : peak
   )
+}
+
+function calculateTagInsights(campaign: any) {
+  const attributions = campaign.attributions || []
+  
+  // Separate followers and churns
+  const followers = attributions.filter((attr: any) => attr.event.event_type === 'FOLLOWED_ME')
+  const churns = attributions.filter((attr: any) => attr.event.event_type === 'UNFOLLOWED_ME')
+  
+  // Extract all tags from followers and churns
+  const followerTags = new Map()
+  const churnTags = new Map()
+  
+  followers.forEach((attr: any) => {
+    const profile = attr.event.profile
+    if (profile.tags) {
+      profile.tags.forEach((profileTag: any) => {
+        const tagName = profileTag.tag.tag_name
+        followerTags.set(tagName, (followerTags.get(tagName) || 0) + 1)
+      })
+    }
+  })
+  
+  churns.forEach((attr: any) => {
+    const profile = attr.event.profile
+    if (profile.tags) {
+      profile.tags.forEach((profileTag: any) => {
+        const tagName = profileTag.tag.tag_name
+        churnTags.set(tagName, (churnTags.get(tagName) || 0) + 1)
+      })
+    }
+  })
+  
+  // Calculate tag percentages
+  const totalFollowers = followers.length
+  const totalChurns = churns.length
+  
+  const followerTagStats = Array.from(followerTags.entries()).map(([tagName, count]) => ({
+    tag: tagName,
+    count,
+    percentage: totalFollowers > 0 ? Math.round((count / totalFollowers) * 100) : 0
+  })).sort((a, b) => b.percentage - a.percentage)
+  
+  const churnTagStats = Array.from(churnTags.entries()).map(([tagName, count]) => ({
+    tag: tagName,
+    count,
+    percentage: totalChurns > 0 ? Math.round((count / totalChurns) * 100) : 0
+  })).sort((a, b) => b.percentage - a.percentage)
+  
+  // Generate top 3 key stats
+  const topStats = []
+  
+  // Top follower tag
+  if (followerTagStats.length > 0) {
+    const topFollowerTag = followerTagStats[0]
+    topStats.push({
+      value: `${topFollowerTag.percentage}%`,
+      label: `Had the '${topFollowerTag.tag}' tag`,
+      type: 'followers',
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200'
+    })
+  }
+  
+  // Top churn tag
+  if (churnTagStats.length > 0) {
+    const topChurnTag = churnTagStats[0]
+    topStats.push({
+      value: `${topChurnTag.percentage}%`,
+      label: `Had the '${topChurnTag.tag}' tag`,
+      type: 'churns',
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200'
+    })
+  }
+  
+  // Net growth or conversion rate
+  const netGrowth = totalFollowers - totalChurns
+  if (netGrowth !== 0) {
+    topStats.push({
+      value: `${netGrowth > 0 ? '+' : ''}${netGrowth}`,
+      label: 'Net Growth',
+      type: 'growth',
+      color: netGrowth > 0 ? 'text-green-600' : 'text-red-600',
+      bgColor: netGrowth > 0 ? 'bg-green-50' : 'bg-red-50',
+      borderColor: netGrowth > 0 ? 'border-green-200' : 'border-red-200'
+    })
+  }
+  
+  // Generate generalizations
+  const generalizations = []
+  
+  if (followerTagStats.length > 0) {
+    const topTag = followerTagStats[0]
+    if (topTag.percentage > 50) {
+      generalizations.push(`Your followers like the ${topTag.tag} content, post more.`)
+    }
+  }
+  
+  if (churnTagStats.length > 0) {
+    const topChurnTag = churnTagStats[0]
+    if (topChurnTag.percentage > 30) {
+      generalizations.push(`Many people with '${topChurnTag.tag}' tag unfollowed - consider adjusting content strategy.`)
+    }
+  }
+  
+  if (netGrowth > 0) {
+    generalizations.push(`Your campaign gained ${totalFollowers} new followers with strong engagement.`)
+  } else if (netGrowth < 0) {
+    generalizations.push(`Your campaign lost ${Math.abs(netGrowth)} followers - review content strategy.`)
+  }
+  
+  return {
+    topStats: topStats.slice(0, 3), // Top 3 stats
+    generalizations,
+    followerTagStats,
+    churnTagStats,
+    totalFollowers,
+    totalChurns
+  }
 }

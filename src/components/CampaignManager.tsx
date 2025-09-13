@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { useCampaigns, useCampaignMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
-import { PlusCircle, Trash2 } from 'lucide-react'
+import { PlusCircle, Trash2, ChevronRight } from 'lucide-react'
+import { CampaignInsightsDropdown } from './CampaignInsightsDropdown'
 
 const CAMPAIGN_TYPES = ['CONTENT', 'OUTBOUND_FOLLOW'] as const
 
@@ -17,6 +18,7 @@ export function CampaignManager() {
   const [newCampaignName, setNewCampaignName] = useState('')
   const [newCampaignDate, setNewCampaignDate] = useState('')
   const [newCampaignType, setNewCampaignType] = useState<'CONTENT' | 'OUTBOUND_FOLLOW'>('CONTENT')
+  const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null)
 
   const { data: campaigns, isLoading } = useCampaigns()
   const { create, remove } = useCampaignMutations()
@@ -119,37 +121,39 @@ export function CampaignManager() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Campaign Name</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    {expandedCampaignId === null && (
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {campaigns.map((campaign) => (
                     <TableRow key={campaign.campaign_id}>
                       <TableCell className="font-medium">
-                        {campaign.campaign_name}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(campaign.campaign_date, 'date')}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={campaign.campaign_type === 'CONTENT' ? 'default' : 'secondary'}
+                        <CampaignInsightsDropdown
+                          campaignId={campaign.campaign_id}
+                          campaignName={campaign.campaign_name}
+                          onExpandedChange={(isExpanded) => {
+                            setExpandedCampaignId(isExpanded ? campaign.campaign_id : null)
+                          }}
                         >
-                          {campaign.campaign_type}
-                        </Badge>
+                          <div className="flex items-center gap-2 hover:text-primary cursor-pointer">
+                            {campaign.campaign_name}
+                          </div>
+                        </CampaignInsightsDropdown>
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteCampaign(campaign)}
-                          disabled={remove.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TableCell>
+                      {expandedCampaignId === null && (
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteCampaign(campaign)}
+                            disabled={remove.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
