@@ -1,13 +1,23 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileArchive, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, FileArchive, CheckCircle, AlertCircle, Loader2, X, File } from 'lucide-react'
 import { toast } from 'sonner'
 
-type IngestionStatus = 'idle' | 'processing' | 'success' | 'error'
+type FileStatus = 'pending' | 'processing' | 'success' | 'error'
+
+interface ProcessedFile {
+  id: string
+  file: File
+  status: FileStatus
+  result?: IngestionResult
+  error?: string
+  startTime?: number
+  endTime?: number
+}
 
 interface IngestionResult {
   snapshot_date: string
@@ -18,27 +28,21 @@ interface IngestionResult {
 }
 
 export function DataIngestion() {
-  const [status, setStatus] = useState<IngestionStatus>('idle')
-  const [result, setResult] = useState<IngestionResult | null>(null)
-  const [error, setError] = useState<string>('')
+  const [files, setFiles] = useState<ProcessedFile[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileSelect = () => {
-    fileInputRef.current?.click()
-  }
+  const generateFileId = (file: File) => `${file.name}-${file.size}-${file.lastModified}`
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const processFile = async (processedFile: ProcessedFile) => {
+    const { file } = processedFile
 
-    if (!file.name.endsWith('.zip')) {
-      toast.error('Please select a ZIP file')
-      return
-    }
-
-    setStatus('processing')
-    setError('')
-    setResult(null)
+    // Update status to processing
+    setFiles(prev => prev.map(f => 
+      f.id === processedFile.id 
+        ? { ...f, status: 'processing' as FileStatus, startTime: Date.now() }
+        : f
+    ))
 
     try {
       // Read the ZIP file
@@ -86,6 +90,7 @@ export function DataIngestion() {
           following_json: followingJson,
           pending_follow_requests_json: pendingFollowRequestsJson,
           original_zip_filename: file.name,
+          file_last_modified: file.lastModified, // Add file modification time
         }),
       })
 
@@ -95,47 +100,159 @@ export function DataIngestion() {
       }
 
       const responseData = await response.json()
-      setResult(responseData.data || responseData)
-      setStatus('success')
-      toast.success('Data ingested successfully!')
+      const result = responseData.data || responseData
+
+      // Update status to success
+      setFiles(prev => prev.map(f => 
+        f.id === processedFile.id 
+          ? { ...f, status: 'success' as FileStatus, result, endTime: Date.now() }
+          : f
+      ))
+
+      toast.success(`Successfully processed ${file.name}`)
 
     } catch (err: any) {
-      setError(err.message || 'An error occurred during ingestion')
-      setStatus('error')
-      toast.error('Ingestion failed: ' + (err.message || 'Unknown error'))
+      const errorMessage = err.message || 'An error occurred during ingestion'
+      
+      // Update status to error
+      setFiles(prev => prev.map(f => 
+        f.id === processedFile.id 
+          ? { ...f, status: 'error' as FileStatus, error: errorMessage, endTime: Date.now() }
+          : f
+      ))
+
+      toast.error(`Failed to process ${file.name}: ${errorMessage}`)
+    }
+  }
+
+  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
+    const fileArray = Array.from(newFiles)
+    
+    // Filter ZIP files and check for duplicates
+    const validFiles = fileArray.filter(file => {
+      if (!file.name.endsWith('.zip')) {
+        toast.error(`${file.name} is not a ZIP file`)
+        return false
+      }
+      return true
+    })
+
+    if (validFiles.length === 0) return
+
+    // Create processed file objects
+    const processedFiles: ProcessedFile[] = validFiles.map(file => ({
+      id: generateFileId(file),
+      file,
+      status: 'pending' as FileStatus,
+    }))
+
+    // Check for duplicates
+    const existingFileIds = new Set(files.map(f => f.id))
+    const newFilesToAdd = processedFiles.filter(pf => !existingFileIds.has(pf.id))
+    const duplicates = processedFiles.filter(pf => existingFileIds.has(pf.id))
+
+    if (duplicates.length > 0) {
+      toast.warning(`${duplicates.length} file(s) already added`)
     }
 
+    if (newFilesToAdd.length === 0) return
+
+    // Add files to state
+    setFiles(prev => [...prev, ...newFilesToAdd])
+
+    // Process files one by one
+    for (const processedFile of newFilesToAdd) {
+      await processFile(processedFile)
+    }
+  }, [files])
+
+  const handleFileSelect = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files
+    if (selectedFiles) {
+      addFiles(selectedFiles)
+    }
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'processing':
-        return <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-      case 'success':
-        return <CheckCircle className="h-5 w-5 text-green-500" />
-      case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-500" />
-      default:
-        return <FileArchive className="h-5 w-5 text-muted-foreground" />
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const droppedFiles = e.dataTransfer.files
+    if (droppedFiles) {
+      addFiles(droppedFiles)
     }
   }
 
-  const getStatusText = () => {
+  const removeFile = (fileId: string) => {
+    setFiles(prev => prev.filter(f => f.id !== fileId))
+  }
+
+  const clearAllFiles = () => {
+    setFiles([])
+  }
+
+  const getFileStatusIcon = (status: FileStatus) => {
     switch (status) {
       case 'processing':
-        return 'Processing Instagram data export...'
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
       case 'success':
-        return 'Data ingested successfully'
+        return <CheckCircle className="h-4 w-4 text-green-500" />
       case 'error':
-        return 'Ingestion failed'
+        return <AlertCircle className="h-4 w-4 text-red-500" />
       default:
-        return 'Ready to process Instagram data export'
+        return <File className="h-4 w-4 text-muted-foreground" />
     }
   }
+
+  const getFileStatusBadge = (status: FileStatus) => {
+    switch (status) {
+      case 'processing':
+        return <Badge className="bg-blue-500 text-white">Processing</Badge>
+      case 'success':
+        return <Badge className="bg-green-500 text-white">Success</Badge>
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>
+      default:
+        return <Badge variant="outline">Pending</Badge>
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const getProcessingTime = (file: ProcessedFile) => {
+    if (!file.startTime) return null
+    const endTime = file.endTime || Date.now()
+    const duration = Math.round((endTime - file.startTime) / 1000)
+    return `${duration}s`
+  }
+
+  const processingFiles = files.filter(f => f.status === 'processing')
+  const completedFiles = files.filter(f => f.status === 'success' || f.status === 'error')
+  const pendingFiles = files.filter(f => f.status === 'pending')
 
   return (
     <Card>
@@ -145,34 +262,45 @@ export function DataIngestion() {
           Data Ingestion
         </CardTitle>
         <CardDescription>
-          Upload your Instagram data export ZIP file to import follower and following data.
+          Upload your Instagram data export ZIP files to import follower and following data.
+          You can select multiple files or drag and drop them.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Upload Section */}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            {getStatusIcon()}
-            <span className="text-sm font-medium">{getStatusText()}</span>
-          </div>
-
-          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6">
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+              isDragOver 
+                ? 'border-primary bg-primary/5' 
+                : 'border-muted-foreground/25'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="text-center space-y-4">
-              <FileArchive className="h-12 w-12 text-muted-foreground mx-auto" />
+              <FileArchive className={`h-12 w-12 mx-auto ${
+                isDragOver ? 'text-primary' : 'text-muted-foreground'
+              }`} />
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Upload Instagram Data Export</h3>
+                <h3 className="text-lg font-semibold">
+                  {isDragOver ? 'Drop ZIP files here' : 'Upload Instagram Data Exports'}
+                </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Select the ZIP file you downloaded from Instagram's data export feature.
-                  The file should contain follower and following data.
+                  {isDragOver 
+                    ? 'Release to add the files to the processing queue'
+                    : 'Drag and drop ZIP files here, or click to select multiple files. Each file will be processed individually.'
+                  }
                 </p>
               </div>
               <Button
                 onClick={handleFileSelect}
-                disabled={status === 'processing'}
+                disabled={processingFiles.length > 0}
                 size="lg"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                {status === 'processing' ? 'Processing...' : 'Select ZIP File'}
+                Select ZIP Files
               </Button>
             </div>
           </div>
@@ -181,59 +309,147 @@ export function DataIngestion() {
             ref={fileInputRef}
             type="file"
             accept=".zip"
+            multiple
             onChange={handleFileChange}
             className="hidden"
           />
         </div>
 
-        {/* Error Display */}
-        {status === 'error' && error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="h-4 w-4 text-red-500" />
-              <span className="font-medium text-red-800">Ingestion Error</span>
-            </div>
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
-
-        {/* Success Results */}
-        {status === 'success' && result && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="font-medium text-green-800">Ingestion Complete</span>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-700">{result.new_profiles}</div>
-                <div className="text-xs text-green-600">New Profiles</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-700">{result.total_events_created}</div>
-                <div className="text-xs text-green-600">Events Created</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-700">{result.profile_updates}</div>
-                <div className="text-xs text-green-600">Profiles Updated</div>
+        {/* File List */}
+        {files.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Processing Queue</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {files.length} file{files.length !== 1 ? 's' : ''} total
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearAllFiles}
+                  disabled={processingFiles.length > 0}
+                >
+                  Clear All
+                </Button>
               </div>
             </div>
 
+            {/* Processing Status Summary */}
+            {(processingFiles.length > 0 || pendingFiles.length > 0) && (
+              <div className="flex items-center gap-4 text-sm">
+                {processingFiles.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    <span>Processing {processingFiles.length} file{processingFiles.length !== 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                {pendingFiles.length > 0 && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>{pendingFiles.length} pending</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* File List */}
             <div className="space-y-2">
-              <h4 className="font-medium text-green-800">Event Breakdown:</h4>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(result.event_breakdown).map(([eventType, count]) => (
-                  <Badge key={eventType} variant="outline" className="border-green-300 text-green-700">
-                    {eventType}: {count}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+              {files.map((file) => (
+                <div
+                  key={file.id}
+                  className={`border rounded-lg p-4 transition-colors ${
+                    file.status === 'processing' ? 'bg-blue-50 border-blue-200' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {getFileStatusIcon(file.status)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{file.file.name}</span>
+                          {getFileStatusBadge(file.status)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <span>{formatFileSize(file.file.size)}</span>
+                          {getProcessingTime(file) && (
+                            <span className="ml-2">• {getProcessingTime(file)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFile(file.id)}
+                      disabled={file.status === 'processing'}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-            <p className="text-sm text-green-700">
-              Snapshot date: <strong>{result.snapshot_date}</strong>
-            </p>
+                  {/* Success Results */}
+                  {file.status === 'success' && file.result && (
+                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                        <div>
+                          <div className="text-lg font-bold text-green-700">{file.result.new_profiles}</div>
+                          <div className="text-xs text-green-600">New Profiles</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-green-700">{file.result.total_events_created}</div>
+                          <div className="text-xs text-green-600">Events Created</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-green-700">{file.result.profile_updates}</div>
+                          <div className="text-xs text-green-600">Profiles Updated</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-green-700">{file.result.snapshot_date}</div>
+                          <div className="text-xs text-green-600">Snapshot Date</div>
+                        </div>
+                      </div>
+                      
+                      {Object.keys(file.result.event_breakdown).length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs font-medium text-green-800 mb-2">Event Breakdown:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(file.result.event_breakdown).map(([eventType, count]) => (
+                              <Badge key={eventType} variant="outline" className="border-green-300 text-green-700 text-xs">
+                                {eventType}: {count}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Error Display */}
+                  {file.status === 'error' && file.error && (
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="font-medium text-red-800 text-sm">Processing Error</div>
+                          <div className="text-sm text-red-700 mt-1">{file.error}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Processing Progress */}
+                  {file.status === 'processing' && (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-2 text-sm text-blue-700">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Processing Instagram data export...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -244,7 +460,7 @@ export function DataIngestion() {
             <li>Go to Instagram Settings & Privacy → Account Center → Your information and permissions → Download your information</li>
             <li>Request a download of your data in JSON format</li>
             <li>Instagram will email you a download link (this can take a few days)</li>
-            <li>Download and extract the ZIP file, then upload it here</li>
+            <li>Download the ZIP files and upload them here (you can upload multiple exports)</li>
           </ol>
         </div>
       </CardContent>

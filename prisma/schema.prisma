@@ -102,10 +102,14 @@ model Attribution {
   @@index([campaign_id])
 }
 
-// Tracks processed snapshot dates for idempotence, as per SRD FR-1.2.
+// Tracks processed snapshot timestamps for idempotence, as per SRD FR-1.2.
 model Snapshot {
-  snapshot_date String   @id @unique // YYYY-MM-DD format
-  processed_at  DateTime @default(now())
+  snapshot_id       Int      @id @default(autoincrement())
+  snapshot_ts       DateTime @unique // Full timestamp of the snapshot
+  original_filename String   // Original ZIP filename for reference
+  processed_at      DateTime @default(now())
+
+  @@index([snapshot_ts])
 }
 
 // Models for audience segmentation via tags.

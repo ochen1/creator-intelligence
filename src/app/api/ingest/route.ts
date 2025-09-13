@@ -17,8 +17,8 @@ type IngestBody = {
   following_json?: string
   pending_follow_requests_json?: string
   original_zip_filename?: string
+  file_last_modified?: number // File modification time in milliseconds
 }
-
 
 function extractDateFromFilename(name: string): string | null {
   // pattern: instagram-username-YYYY-MM-DD
@@ -29,6 +29,24 @@ function extractDateFromFilename(name: string): string | null {
   const match = name.match(datePattern)
   if (!match) return null
   return match[0]
+}
+
+/**
+ * Determine snapshot date according to FR-1.2:
+ * 1. If file modification time is reasonable (after 2010), use that
+ * 2. Otherwise, parse date from filename
+ */
+function determineSnapshotDate(filename: string, fileLastModified?: number): string | null {
+  const earliestSane = new Date('2010-01-01').getTime()
+  
+  // First priority: file modification time if reasonable
+  if (fileLastModified && fileLastModified >= earliestSane) {
+    const date = new Date(fileLastModified)
+    return date.toISOString().split('T')[0] // YYYY-MM-DD format
+  }
+  
+  // Second priority: parse from filename
+  return extractDateFromFilename(filename)
 }
 
 interface RawFollowerEntry {
@@ -122,6 +140,7 @@ export async function POST(request: Request) {
     following_json,
     pending_follow_requests_json,
     original_zip_filename,
+    file_last_modified,
   } = body
 
   if (
@@ -135,10 +154,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const snapshotDate = extractDateFromFilename(original_zip_filename)
+  const snapshotDate = determineSnapshotDate(original_zip_filename, file_last_modified)
   if (!snapshotDate) {
-    return jsonError('Could not parse date from original_zip_filename', 400, {
+    return jsonError('Could not determine snapshot date from file modification time or filename', 400, {
       filename: original_zip_filename,
+      file_last_modified,
     })
   }
 
@@ -187,9 +207,8 @@ export async function POST(request: Request) {
     )
 
     // Helper: determine a sane timestamp (Date) from ms or null
-    const now = new Date()
     const earliestSane = new Date('2010-01-01').getTime()
-    const latestSane = now.getTime() + 24 * 3600 * 1000 // allow 1 day future slack
+    const latestSane = Date.now() + 24 * 3600 * 1000 // allow 1 day future slack
 
     function getSaneDateFromMs(ms: number | null | undefined): Date | null {
       if (!ms) return null
@@ -197,8 +216,13 @@ export async function POST(request: Request) {
       return null
     }
 
+    // Determine snapshot date object for fallback timestamps
     const snapshotDateObj = (() => {
-      // Use snapshot date (YYYY-MM-DD) as fallback timestamp for absence-driven events
+      // First try using file modification time if reasonable
+      if (file_last_modified && file_last_modified >= earliestSane) {
+        return new Date(file_last_modified)
+      }
+      // Otherwise use parsed snapshot date (YYYY-MM-DD)
       const d = new Date(snapshotDate)
       if (!isNaN(d.getTime())) return d
       return null
@@ -290,14 +314,19 @@ export async function POST(request: Request) {
 
         // Determine per-event timestamp helpers:
         // - For presence-driven events, prefer JSON timestamp for that category
-        // - For absence-driven events, fall back to snapshotDateObj then now
+        // - For absence-driven events, fall back to snapshotDateObj (never use 'now')
         function tsForPresence(categoryMap: Map<string, number | null> | undefined) {
           const ms = categoryMap?.get(username) ?? null
           const sane = getSaneDateFromMs(ms)
-          return sane ?? snapshotDateObj ?? now
+          if (sane) return sane
+          if (snapshotDateObj) return snapshotDateObj
+          // Final fallback to parsed snapshot date
+          return new Date(snapshotDate!)
         }
         function tsForAbsence() {
-          return snapshotDateObj ?? now
+          if (snapshotDateObj) return snapshotDateObj
+          // Final fallback to parsed snapshot date
+          return new Date(snapshotDate!)
         }
 
         // FR-1.3.1: Inbound Followers
@@ -380,10 +409,51 @@ export async function POST(request: Request) {
           }
         }
         const dedupedEvents = Array.from(dedupMap.values())
+
+        // Before inserting, ensure we don't insert an event that already exists
+        // in the DB with the exact same profile_pk, event_type, and event_ts.
         if (dedupedEvents.length > 0) {
-          await tx.interactionEvent.createMany({
-            data: dedupedEvents,
+          const profilePkSet = Array.from(new Set(dedupedEvents.map(e => e.profile_pk)))
+          const eventTypeSet = Array.from(new Set(dedupedEvents.map(e => e.event_type)))
+          const eventTsList = Array.from(new Set(dedupedEvents.map(e => e.event_ts)))
+          
+          // Fetch any existing identical events
+          const existingEvents = await tx.interactionEvent.findMany({
+            where: {
+              AND: [
+                { profile_pk: { in: profilePkSet } },
+                { event_type: { in: eventTypeSet } },
+                { event_ts: { in: eventTsList } },
+              ],
+            },
+            select: {
+              profile_pk: true,
+              event_type: true,
+              event_ts: true,
+            },
           })
+
+          const existingSet = new Set<string>()
+          for (const ev of existingEvents) {
+            existingSet.add(`${ev.profile_pk}|${ev.event_type}|${ev.event_ts.toISOString()}`)
+          }
+
+          // Filter out events that exactly match existing rows
+          const toInsert = dedupedEvents.filter(e => {
+            const key = `${e.profile_pk}|${e.event_type}|${e.event_ts.toISOString()}`
+            return !existingSet.has(key)
+          })
+
+          if (toInsert.length > 0) {
+            await tx.interactionEvent.createMany({
+              data: toInsert,
+            })
+          }
+
+          // Replace eventCreates with the actual inserted events for summary calculations
+          // (we'll use toInsert for the counts/breakdown below)
+          eventCreates.length = 0
+          eventCreates.push(...toInsert)
         }
       }
 
