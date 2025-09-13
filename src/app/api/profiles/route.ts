@@ -92,8 +92,16 @@ export async function GET(request: Request) {
       }),
     ])
 
-    return jsonSuccess(profiles, {
-      pagination: paginationMeta(page, pageSize, total),
+    const paginationData = paginationMeta(page, pageSize, total)
+    
+    return jsonSuccess({
+      data: profiles,
+      total,
+      page,
+      pageSize,
+      totalPages: paginationData.totalPages
+    }, {
+      pagination: paginationData,
       filters: {
         search: rawSearch || null,
         status: rawStatus,

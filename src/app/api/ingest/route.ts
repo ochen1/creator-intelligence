@@ -148,17 +148,22 @@ export async function POST(request: Request) {
       new Set([...followers, ...following, ...pending]),
     )
 
-    // Step 4-9 Transaction
+    // Step 4-9 Transaction with extended timeout
     const resultSummary = await prisma.$transaction(async (tx) => {
-      // Step 5: Ensure Profiles exist
-      for (const username of allUsernames) {
-        if (!username) continue
-        await tx.profile.upsert({
-          where: { current_username: username },
-          update: {},
-          create: {
+      // Step 5: Ensure Profiles exist (batch creation for efficiency)
+      const existingProfiles = await tx.profile.findMany({
+        where: { current_username: { in: allUsernames } },
+        select: { current_username: true }
+      })
+      
+      const existingUsernames = new Set(existingProfiles.map(p => p.current_username))
+      const newUsernames = allUsernames.filter(u => u && !existingUsernames.has(u))
+      
+      if (newUsernames.length > 0) {
+        await tx.profile.createMany({
+          data: newUsernames.map(username => ({
             current_username: username,
-          },
+          }))
         })
       }
 
@@ -303,12 +308,18 @@ export async function POST(request: Request) {
         })
       }
 
-      // Persist profile flag updates
-      for (const upd of profileUpdates) {
-        await tx.profile.update({
-          where: { profile_pk: upd.profile_pk },
-          data: upd.data,
-        })
+      // Persist profile flag updates in batches to avoid timeout
+      const batchSize = 50
+      for (let i = 0; i < profileUpdates.length; i += batchSize) {
+        const batch = profileUpdates.slice(i, i + batchSize)
+        await Promise.all(
+          batch.map(upd =>
+            tx.profile.update({
+              where: { profile_pk: upd.profile_pk },
+              data: upd.data,
+            })
+          )
+        )
       }
 
       // Record snapshot
@@ -331,6 +342,8 @@ export async function POST(request: Request) {
         ),
         profile_updates: profileUpdates.length,
       }
+    }, {
+      timeout: 30000, // 30 second timeout instead of default 5 seconds
     })
 
     return jsonSuccess(resultSummary)
