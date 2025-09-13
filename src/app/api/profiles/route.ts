@@ -83,11 +83,12 @@ export async function GET(request: Request) {
         orderBy: { profile_pk: 'asc' },
         select: {
           profile_pk: true,
-            current_username: true,
-            first_seen_ts: true,
-            is_active_follower: true,
-            is_currently_following: true,
-            is_pending_outbound_request: true,
+          current_username: true,
+          first_seen_ts: true,
+          notes: true,
+          is_active_follower: true,
+          is_currently_following: true,
+          is_pending_outbound_request: true,
         },
       }),
     ])

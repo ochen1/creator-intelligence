@@ -4,18 +4,123 @@ import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useProfiles } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
-import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X } from 'lucide-react'
 import type { Profile } from '@/lib/hooks'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 interface ProfileListProps {
   onSelectProfile: (username: string) => void
   selectedProfilePks?: number[]
   onSelectionChange?: (profilePks: number[]) => void
+}
+
+// API function for updating profile notes
+const updateProfileNotes = async ({ username, notes }: { username: string; notes: string }) => {
+  const res = await fetch(`/api/profiles/${encodeURIComponent(username)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ notes }),
+  })
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '')
+    throw new Error(msg || 'Failed to update notes')
+  }
+  return res.json()
+}
+
+// Notes cell component with inline editing
+function NotesCell({ profile }: { profile: Profile }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState<string>(profile.notes ?? '')
+
+  const updateNotesMutation = useMutation({
+    mutationFn: updateProfileNotes,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      setEditing(false)
+    },
+  })
+
+  const save = () => {
+    if (!updateNotesMutation.isPending) {
+      updateNotesMutation.mutate({
+        username: profile.current_username,
+        notes: value,
+      })
+    }
+  }
+
+  return (
+    <div className="w-full max-w-[300px]" onClick={(e) => e.stopPropagation()}>
+      {!editing ? (
+        <div className="group flex items-center gap-2">
+          {profile.notes && profile.notes.length > 0 ? (
+            <span title={profile.notes} className="truncate text-sm flex-1">
+              {profile.notes}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs flex-1">No notes</span>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(true)}
+            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={2}
+            autoFocus
+            className="text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setEditing(false)
+                setValue(profile.notes ?? '')
+              }
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                save()
+              }
+            }}
+          />
+          <div className="flex gap-1">
+            <Button size="sm" onClick={save} disabled={updateNotesMutation.isPending} className="h-7 text-xs">
+              <Check className="h-3 w-3 mr-1" />
+              {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={updateNotesMutation.isPending}
+              onClick={() => {
+                setEditing(false)
+                setValue(profile.notes ?? '')
+              }}
+              className="h-7 text-xs"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function ProfileList({ 
@@ -264,12 +369,8 @@ export function ProfileList({
                       <TableCell>
                         {formatDate(profile.first_seen_ts, 'date')}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {profile.notes ? (
-                          <span className="text-sm">{profile.notes}</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No notes</span>
-                        )}
+                      <TableCell>
+                        <NotesCell profile={profile} />
                       </TableCell>
                     </TableRow>
                   ))
