@@ -51,8 +51,8 @@ export function DataIngestion() {
       const zip = new JSZip()
       const zipContents = await zip.loadAsync(arrayBuffer)
 
-      // Extract required files
-      const extractFile = async (path: string): Promise<string> => {
+      // Extract required files and their stored timestamps inside the ZIP
+      const extractFile = async (path: string): Promise<{ text: string; dateMs: number | null }> => {
         // Try exact path first
         let zipFile = zipContents.file(path)
         
@@ -72,25 +72,33 @@ export function DataIngestion() {
           throw new Error(`Required file not found: ${path}`)
         }
 
-        return await zipFile.async('text')
+        // JSZip exposes a .date property on the file entry (Date)
+        const dateMs = zipFile.date ? zipFile.date.getTime() : null
+        const text = await zipFile.async('text')
+        return { text, dateMs }
       }
 
-      const followers1Json = await extractFile('connections/followers_and_following/followers_1.json')
-      const followingJson = await extractFile('connections/followers_and_following/following.json')
-      const pendingFollowRequestsJson = await extractFile('connections/followers_and_following/pending_follow_requests.json')
+      const followers1 = await extractFile('connections/followers_and_following/followers_1.json')
+      const following = await extractFile('connections/followers_and_following/following.json')
+      const pending = await extractFile('connections/followers_and_following/pending_follow_requests.json')
 
-      // Send to ingestion API
+      // Determine a ZIP-internal timestamp to send to the server.
+      // Use the latest stored timestamp among the required files when available.
+      const candidateDates = [followers1.dateMs, following.dateMs, pending.dateMs].filter(d => typeof d === 'number') as number[]
+      const innerFileLastModified = candidateDates.length > 0 ? Math.max(...candidateDates) : undefined
+
+      // Send to ingestion API (use inner-file timestamp if present)
       const response = await fetch('/api/ingest', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          followers_1_json: followers1Json,
-          following_json: followingJson,
-          pending_follow_requests_json: pendingFollowRequestsJson,
+          followers_1_json: followers1.text,
+          following_json: following.text,
+          pending_follow_requests_json: pending.text,
           original_zip_filename: file.name,
-          file_last_modified: file.lastModified, // Add file modification time
+          file_last_modified: innerFileLastModified, // <-- use timestamp from inside ZIP
         }),
       })
 
