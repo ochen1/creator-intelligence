@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, type MouseEvent } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -187,6 +187,10 @@ export function ProfileList({
   const [tagFilter, setTagFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
+  // Index of the last checkbox that was interacted with (for shift+click range selection)
+  const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null)
+  // Capture whether the pointer interaction that will trigger onCheckedChange had Shift pressed.
+  const pointerShiftRef = useRef<boolean | null>(null)
 
   const { data: allTags } = useTags()
   const { data: profilesResponse, isLoading, isError, error } = useProfiles({
@@ -294,6 +298,58 @@ export function ProfileList({
       : selectedProfilePks.filter(pk => pk !== profilePk)
     
     onSelectionChange(newSelection)
+  }
+
+  // Handle click on a row checkbox or modified row click, supporting shift+click to select ranges.
+  const handleRowClick = (profilePk: number, index: number, e: MouseEvent) => {
+    if (!onSelectionChange) return
+
+    const currentlySelected = selectedProfilePks.includes(profilePk)
+    const intendedChecked = !currentlySelected
+    const shift = e.shiftKey
+
+    if (shift && lastCheckedIndex !== null) {
+      const start = Math.min(lastCheckedIndex, index)
+      const end = Math.max(lastCheckedIndex, index)
+      const rangePks = profiles.slice(start, end + 1).map(p => p.profile_pk)
+
+      if (intendedChecked) {
+        const newSelection = Array.from(new Set([...selectedProfilePks, ...rangePks]))
+        onSelectionChange(newSelection)
+      } else {
+        const removeSet = new Set(rangePks)
+        const newSelection = selectedProfilePks.filter(pk => !removeSet.has(pk))
+        onSelectionChange(newSelection)
+      }
+    } else {
+      handleRowSelection(profilePk, intendedChecked)
+    }
+
+    setLastCheckedIndex(index)
+  }
+
+  // Checkbox toggle handler using pointerShiftRef to know if Shift was held on pointer down
+  const handleCheckboxToggle = (profilePk: number, index: number, targetChecked: boolean) => {
+    if (!onSelectionChange) return
+    const shift = pointerShiftRef.current
+    pointerShiftRef.current = null
+
+    if (shift && lastCheckedIndex !== null) {
+      const start = Math.min(lastCheckedIndex, index)
+      const end = Math.max(lastCheckedIndex, index)
+      const rangePks = profiles.slice(start, end + 1).map(p => p.profile_pk)
+      if (targetChecked) {
+        const newSelection = Array.from(new Set([...selectedProfilePks, ...rangePks]))
+        onSelectionChange(newSelection)
+      } else {
+        const removeSet = new Set(rangePks)
+        const newSelection = selectedProfilePks.filter(pk => !removeSet.has(pk))
+        onSelectionChange(newSelection)
+      }
+    } else {
+      handleRowSelection(profilePk, targetChecked)
+    }
+    setLastCheckedIndex(index)
   }
 
   // Handle select all
@@ -460,20 +516,43 @@ export function ProfileList({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  profiles.map((profile) => (
-                    <TableRow 
+                  profiles.map((profile, idx) => (
+                    <TableRow
                       key={profile.profile_pk}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => onSelectProfile(profile.current_username)}
+                      onClick={(e) => {
+                        // Support row-based multi-select with Shift / Cmd / Ctrl
+                        // - Shift+Click: range select based on last anchor
+                        // - Cmd/Ctrl+Click: toggle single row without opening sheet
+                        if ((e.shiftKey || e.metaKey || e.ctrlKey) && onSelectionChange) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRowClick(profile.profile_pk, idx, e as unknown as MouseEvent);
+                          return;
+                        }
+                        onSelectProfile(profile.current_username);
+                      }}
                     >
                       {onSelectionChange && (
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={selectedProfilePks.includes(profile.profile_pk)}
-                            onCheckedChange={(checked) => 
-                              handleRowSelection(profile.profile_pk, checked === true)
-                            }
-                          />
+                          <div
+                            onPointerDown={(e) => {
+                              // Record whether shift was held for this pointer interaction
+                              pointerShiftRef.current = e.shiftKey
+                            }}
+                            onClick={(e) => {
+                              // Prevent row onClick bubbling when clicking the checkbox container
+                              e.stopPropagation()
+                            }}
+                          >
+                            <Checkbox
+                              checked={selectedProfilePks.includes(profile.profile_pk)}
+                              onCheckedChange={(checked) => {
+                                handleCheckboxToggle(profile.profile_pk, idx, checked === true)
+                              }}
+                              // Keyboard (space) toggles won't trigger pointerDown; shift selection not expected for keyboard by default.
+                            />
+                          </div>
                         </TableCell>
                       )}
                       <TableCell className="font-medium">
