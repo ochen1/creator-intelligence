@@ -408,7 +408,7 @@ export function TagAnalyticsDashboard() {
                           item.ratio > 2 ? 'text-green-600' :
                           item.ratio > 1 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
-                          {item.ratio === Infinity ? '∞' : item.ratio.toFixed(1)}
+                          {item.ratio === Infinity ? '∞' : item?.ratio?.toFixed(1)}
                         </span>
                       </td>
                       <td className="p-2 text-right font-medium">{item.total_count}</td>
