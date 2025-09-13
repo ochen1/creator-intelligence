@@ -17,7 +17,8 @@ type Tag = {
 async function fetchTags(): Promise<Tag[]> {
   const res = await fetch('/api/tags');
   if (!res.ok) throw new Error('Failed to fetch tags');
-  return res.json();
+  const json = await res.json(); // { success, data: Tag[] }
+  return json.data || [];
 }
 
 async function bulkTagProfiles(profilePks: number[], tagId: number, action: 'add' | 'remove'): Promise<void> {
@@ -30,6 +31,24 @@ async function bulkTagProfiles(profilePks: number[], tagId: number, action: 'add
     const msg = await res.text().catch(() => '');
     throw new Error(msg || 'Bulk tag operation failed');
   }
+}
+
+/**
+ * Remove all auto-assigned (classifier inferred) tags from the given profiles.
+ * Leaves manually added tags untouched.
+ */
+async function bulkRemoveAutoAssignedTags(profilePks: number[]): Promise<{ summary: { requested_profiles: number; deleted_links: number; affected_profiles: number } }> {
+  const res = await fetch('/api/profiles/tags/bulk/remove-auto-assigned', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profilePks }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Bulk remove auto-assigned tags failed');
+  }
+  const json = await res.json(); // { success, data: { summary, details }, meta? }
+  return json.data; // unwrap to return the { summary, details } object
 }
 
 export function BulkTagsSheet({ profilePks }: { profilePks: number[] }) {
@@ -57,6 +76,22 @@ export function BulkTagsSheet({ profilePks }: { profilePks: number[] }) {
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Bulk tag operation failed');
+    },
+  });
+
+  const autoRemoveMutation = useMutation({
+    mutationFn: async () => {
+      if (profilePks.length === 0) throw new Error('No profiles selected');
+      return bulkRemoveAutoAssignedTags(profilePks);
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      toast.success(
+        `Removed ${data?.summary?.deleted_links ?? 0} auto tag link(s) from ${data?.summary?.affected_profiles ?? 0} profile(s)`
+      );
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed removing auto-assigned tags');
     },
   });
 
@@ -118,6 +153,31 @@ export function BulkTagsSheet({ profilePks }: { profilePks: number[] }) {
               {(mutation.error as Error).message}
             </div>
           )}
+
+          <div className="pt-4 mt-2 border-t space-y-2">
+            <div>
+              <label className="text-sm font-medium">Auto-assigned Tags</label>
+              <p className="text-xs text-muted-foreground">
+                Remove all automatically inferred (classifier) tags from the selected profiles. Manual tags remain untouched.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={() => autoRemoveMutation.mutate()}
+              disabled={autoRemoveMutation.isPending || profilePks.length === 0}
+              className="w-full"
+            >
+              {autoRemoveMutation.isPending
+                ? 'Removing...'
+                : `Remove Auto Tags (${profilePks.length})`}
+            </Button>
+            {autoRemoveMutation.error && (
+              <div className="text-destructive text-sm">
+                {(autoRemoveMutation.error as Error).message}
+              </div>
+            )}
+          </div>
         </div>
         <SheetFooter />
       </SheetContent>
