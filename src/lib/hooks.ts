@@ -2,6 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 // Types
+export type Tag = {
+  tag_id: number
+  tag_name: string
+}
+
 export type Campaign = {
   campaign_id: number
   campaign_name: string
@@ -149,6 +154,62 @@ export const api = {
     if (!res.ok) throw new Error('Failed to apply bulk attribution')
     const response = await res.json()
     return response.data
+  },
+
+  // Tags
+  fetchTags: async (): Promise<Tag[]> => {
+    const res = await fetch('/api/tags')
+    if (!res.ok) throw new Error('Failed to fetch tags')
+    const response = await res.json()
+    return response.data || []
+  },
+
+  createTag: async (tagName: string): Promise<Tag> => {
+    const res = await fetch('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagName })
+    })
+    if (!res.ok) throw new Error('Failed to create tag')
+    const response = await res.json()
+    return response.data
+  },
+
+  updateTag: async (id: number, tagName: string): Promise<Tag> => {
+    const res = await fetch(`/api/tags/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagName })
+    })
+    if (!res.ok) throw new Error('Failed to update tag')
+    const response = await res.json()
+    return response.data
+  },
+
+  deleteTag: async (id: number): Promise<void> => {
+    const res = await fetch(`/api/tags/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Failed to delete tag')
+  },
+
+  // Profile Tags
+  addTagToProfile: async (username: string, tagId: number) => {
+    const res = await fetch(`/api/profiles/${encodeURIComponent(username)}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagId })
+    })
+    if (!res.ok) throw new Error('Failed to add tag to profile')
+    const response = await res.json()
+    return response.data
+  },
+
+  removeTagFromProfile: async (username: string, tagId: number) => {
+    const res = await fetch(`/api/profiles/${encodeURIComponent(username)}/tags`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagId })
+    })
+    if (!res.ok) throw new Error('Failed to remove tag from profile')
   }
 }
 
@@ -172,6 +233,13 @@ export function useProfile(username: string) {
     queryKey: ['profile', username],
     queryFn: () => api.fetchProfile(username),
     enabled: !!username
+  })
+}
+
+export function useTags() {
+  return useQuery({
+    queryKey: ['tags'],
+    queryFn: api.fetchTags
   })
 }
 
@@ -253,4 +321,80 @@ export function useAttributionMutations() {
   })
 
   return { setAttribution, deleteAttribution, bulkAttribution }
+}
+
+export function useTagMutations() {
+  const queryClient = useQueryClient()
+
+  const create = useMutation({
+    mutationFn: api.createTag,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+      toast.success('Tag created successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create tag: ${error.message}`)
+    }
+  })
+
+  const update = useMutation({
+    mutationFn: ({ id, tagName }: { id: number; tagName: string }) =>
+      api.updateTag(id, tagName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      toast.success('Tag updated successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update tag: ${error.message}`)
+    }
+  })
+
+  const remove = useMutation({
+    mutationFn: api.deleteTag,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      toast.success('Tag deleted successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete tag: ${error.message}`)
+    }
+  })
+
+  return { create, update, remove }
+}
+
+export function useProfileTagMutations() {
+  const queryClient = useQueryClient()
+
+  const addTag = useMutation({
+    mutationFn: ({ username, tagId }: { username: string; tagId: number }) =>
+      api.addTagToProfile(username, tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      toast.success('Tag added to profile')
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to add tag: ${error.message}`)
+    }
+  })
+
+  const removeTag = useMutation({
+    mutationFn: ({ username, tagId }: { username: string; tagId: number }) =>
+      api.removeTagFromProfile(username, tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      toast.success('Tag removed from profile')
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to remove tag: ${error.message}`)
+    }
+  })
+
+  return { addTag, removeTag }
 }

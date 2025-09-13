@@ -104,6 +104,11 @@ export async function GET(request: Request) {
         is_active_follower: true,
         is_currently_following: true,
         is_pending_outbound_request: true,
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
       },
     })
 

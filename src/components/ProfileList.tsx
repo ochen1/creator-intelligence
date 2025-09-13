@@ -8,9 +8,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useProfiles } from '@/lib/hooks'
+import { TagChip } from '@/components/ui/TagChip'
+import { TagSelector } from '@/components/ui/TagSelector'
+import { TagsManagerSheet } from '@/components/TagsManagerSheet'
+import { useProfiles, useTags, useProfileTagMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
-import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X } from 'lucide-react'
+import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X, Hash } from 'lucide-react'
 import type { Profile } from '@/lib/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -123,16 +126,66 @@ function NotesCell({ profile }: { profile: Profile }) {
   )
 }
 
-export function ProfileList({ 
-  onSelectProfile, 
-  selectedProfilePks = [], 
-  onSelectionChange 
+// Tags cell component with inline tag management
+function TagsCell({ profile }: { profile: Profile }) {
+  const { data: allTags } = useTags()
+  const { addTag, removeTag } = useProfileTagMutations()
+
+  const profileTags = profile.tags?.map(pt => pt.tag) || []
+  const availableTags = allTags?.filter(tag =>
+    !profileTags.some(pt => pt.tag_id === tag.tag_id)
+  ) || []
+
+  const handleAddTag = (tagId: number) => {
+    addTag.mutate({ username: profile.current_username, tagId })
+  }
+
+  const handleRemoveTag = (tagId: number) => {
+    removeTag.mutate({ username: profile.current_username, tagId })
+  }
+
+  return (
+    <div className="w-full max-w-[250px]" onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-wrap gap-1">
+        {profileTags.map((tag) => (
+          <TagChip
+            key={tag.tag_id}
+            size="sm"
+            onRemove={() => handleRemoveTag(tag.tag_id)}
+            disabled={removeTag.isPending}
+          >
+            {tag.tag_name}
+          </TagChip>
+        ))}
+        {availableTags.length > 0 && (
+          <TagSelector
+            availableTags={availableTags}
+            onSelect={handleAddTag}
+            disabled={addTag.isPending}
+            variant="icon"
+            size="sm"
+          />
+        )}
+        {profileTags.length === 0 && availableTags.length === 0 && (
+          <span className="text-muted-foreground text-xs">No tags</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function ProfileList({
+  onSelectProfile,
+  selectedProfilePks = [],
+  onSelectionChange
 }: ProfileListProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [tagFilter, setTagFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
 
+  const { data: allTags } = useTags()
   const { data: profilesResponse, isLoading, isError, error } = useProfiles({
     status: statusFilter === 'all' ? undefined : statusFilter,
     search: searchQuery || undefined,
@@ -142,9 +195,19 @@ export function ProfileList({
     sortDir: 'desc'
   })
 
-  const profiles = profilesResponse?.data || []
-  const total = profilesResponse?.total || 0
-  const totalPages = profilesResponse?.totalPages || 1
+  let profiles = profilesResponse?.data || []
+  let total = profilesResponse?.total || 0
+  let totalPages = profilesResponse?.totalPages || 1
+
+  // Apply client-side tag filtering
+  if (tagFilter !== 'all' && tagFilter) {
+    const tagId = parseInt(tagFilter, 10)
+    profiles = profiles.filter(profile =>
+      profile.tags?.some(pt => pt.tag.tag_id === tagId)
+    )
+    total = profiles.length
+    totalPages = Math.ceil(total / pageSize)
+  }
 
   // Status filter semantics:
   // follower  = they follow me AND I do NOT follow them back
@@ -253,16 +316,19 @@ export function ProfileList({
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Profiles</span>
-          {selectedProfilePks.length > 0 && (
-            <Badge variant="outline" className="text-sm">
-              {selectedProfilePks.length} selected
-            </Badge>
-          )}
+          <div className="flex items-center gap-3">
+            {selectedProfilePks.length > 0 && (
+              <Badge variant="outline" className="text-sm">
+                {selectedProfilePks.length} selected
+              </Badge>
+            )}
+            <TagsManagerSheet />
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Filters */}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           {/* Search */}
           <div className="space-y-2">
             <label htmlFor="search" className="text-sm font-medium">Search Username</label>
@@ -296,6 +362,38 @@ export function ProfileList({
                   }}
                 >
                   {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tag Filter */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Filter by Tag</label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={tagFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => {
+                  setTagFilter('all')
+                  setPage(1)
+                }}
+              >
+                All Tags
+              </Button>
+              {allTags?.map((tag) => (
+                <Button
+                  key={tag.tag_id}
+                  size="sm"
+                  variant={tagFilter === String(tag.tag_id) ? 'default' : 'outline'}
+                  onClick={() => {
+                    setTagFilter(String(tag.tag_id))
+                    setPage(1)
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <Hash className="h-3 w-3" />
+                  {tag.tag_name}
                 </Button>
               ))}
             </div>
@@ -340,6 +438,7 @@ export function ProfileList({
                   <TableHead>Last Interaction Reason</TableHead>
                   <TableHead>Last Interaction At</TableHead>
                   <TableHead>First Seen</TableHead>
+                  <TableHead>Tags</TableHead>
                   <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
@@ -347,7 +446,7 @@ export function ProfileList({
                 {profiles.length === 0 ? (
                  <TableRow>
                    <TableCell
-                     colSpan={onSelectionChange ? 7 : 6}
+                     colSpan={onSelectionChange ? 8 : 7}
                      className="h-24 text-center text-muted-foreground"
                    >
                       <div className="flex flex-col items-center justify-center py-4">
@@ -403,6 +502,9 @@ export function ProfileList({
                       </TableCell>
                       <TableCell>
                         {formatDate(profile.first_seen_ts, 'date')}
+                      </TableCell>
+                      <TableCell>
+                        <TagsCell profile={profile} />
                       </TableCell>
                       <TableCell>
                         <NotesCell profile={profile} />
