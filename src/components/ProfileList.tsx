@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, type MouseEvent } from 'react'
+import { useState, useMemo, useRef, useEffect, type MouseEvent } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import { BulkTagsSheet } from '@/components/BulkTagsSheet'
 import { useProfiles, useTags, useProfileTagMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
 import { Search, UserCheck, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Check, X, Hash } from 'lucide-react'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import type { Profile, Tag } from '@/lib/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -211,6 +212,52 @@ export function ProfileList({
   let total = profilesResponse?.total || 0
   let totalPages = profilesResponse?.totalPages || 1
 
+  // Tooltip text for selected profiles (best-effort: visible names first, then try to fetch more)
+  const [selectedNamesTooltip, setSelectedNamesTooltip] = useState<string>('')
+  useEffect(() => {
+    if (!selectedProfilePks || selectedProfilePks.length === 0) {
+      setSelectedNamesTooltip('')
+      return
+    }
+
+    // Build a quick map from currently-loaded profiles
+    const visibleMap = new Map<number, string>(profiles.map((p: any) => [p.profile_pk, p.current_username]))
+    const missingPks = selectedProfilePks.filter(pk => !visibleMap.has(pk))
+    const visibleNames = selectedProfilePks.map(pk => visibleMap.get(pk) ?? `#${pk}`)
+
+    // If everything is visible, set tooltip immediately
+    if (missingPks.length === 0) {
+      setSelectedNamesTooltip(visibleNames.join(', '))
+      return
+    }
+
+    // Otherwise, attempt a best-effort fetch to resolve missing PKs (non-blocking)
+    let cancelled = false
+    ;(async () => {
+      try {
+        // Request a larger page to try and capture selected profiles across pages.
+        // This is best-effort and intentionally conservative to avoid heavy queries.
+        const pageSizeFetch = Math.max(100, selectedProfilePks.length)
+        const res = await fetch(`/api/profiles?page=1&pageSize=${pageSizeFetch}`)
+        if (!res.ok) {
+          if (!cancelled) setSelectedNamesTooltip(visibleNames.join(', '))
+          return
+        }
+        const json = await res.json()
+        const candidates = (json.data && json.data.data) || json.data || []
+        const fetchedMap = new Map<number, string>(candidates.map((p: any) => [p.profile_pk, p.current_username]))
+        const fullNames = selectedProfilePks.map(pk => fetchedMap.get(pk) ?? visibleMap.get(pk) ?? `#${pk}`)
+        if (!cancelled) setSelectedNamesTooltip(fullNames.join(', '))
+      } catch {
+        if (!cancelled) setSelectedNamesTooltip(visibleNames.join(', '))
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedProfilePks, profilesResponse, profiles])
+
   // Apply client-side tag filtering
   if (tagFilter !== 'all' && tagFilter) {
     const tagId = parseInt(tagFilter, 10)
@@ -382,9 +429,24 @@ export function ProfileList({
           <span>Profiles</span>
           <div className="flex items-center gap-3">
             {selectedProfilePks.length > 0 && (
-              <Badge variant="outline" className="text-sm">
-                {selectedProfilePks.length} selected
-              </Badge>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Badge variant="outline" className="text-sm">
+                    {selectedProfilePks.length} selected
+                  </Badge>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="max-h-40 overflow-auto text-sm">
+                    {selectedNamesTooltip ? (
+                      selectedNamesTooltip.split(', ').map((n, i) => (
+                        <div key={i} className="py-0.5">{n}</div>
+                      ))
+                    ) : (
+                      <div className="text-muted-foreground">Loading...</div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
             <TagsManagerSheet />
           </div>
@@ -653,9 +715,24 @@ export function ProfileList({
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="rounded-full border bg-background/95 supports-[backdrop-filter]:bg-background/70 backdrop-blur px-4 py-3 shadow-lg flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {selectedProfilePks.length} selected
-              </Badge>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedProfilePks.length} selected
+                  </Badge>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="max-h-40 overflow-auto text-xs">
+                    {selectedNamesTooltip ? (
+                      selectedNamesTooltip.split(', ').map((n, i) => (
+                        <div key={i} className="py-0.5">{n}</div>
+                      ))
+                    ) : (
+                      <div className="text-muted-foreground">Loading...</div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-2">
