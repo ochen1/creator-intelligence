@@ -11,8 +11,8 @@ export async function GET(request: Request) {
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - parseInt(dateRange))
 
-    // Get followers (profiles that followed in the time range)
-    const followers = await prisma.profile.findMany({
+    // Get distinct follower profiles (accounts that followed in the time range)
+    const followerProfiles = await prisma.profile.findMany({
       where: {
         interaction_events: {
           some: {
@@ -46,8 +46,8 @@ export async function GET(request: Request) {
       }
     })
 
-    // Get churners (profiles that unfollowed in the time range)
-    const churners = await prisma.profile.findMany({
+    // Get distinct churner profiles (accounts that unfollowed in the time range)
+    const churnerProfiles = await prisma.profile.findMany({
       where: {
         interaction_events: {
           some: {
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       }
     })
 
-    // Analyze follower tags
+    // Count tag occurrences across follower profiles
     const followerTagCounts = new Map<string, number>()
     const followerTagDetails = new Map<string, {
       tag_id: number
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       profiles: string[]
     }>()
 
-    followers.forEach(profile => {
+    followerProfiles.forEach(profile => {
       profile.tags.forEach(profileTag => {
         const tagName = profileTag.tag.tag_name
         const currentCount = followerTagCounts.get(tagName) || 0
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       })
     })
 
-    // Analyze churner tags
+    // Count tag occurrences across churner profiles
     const churnerTagCounts = new Map<string, number>()
     const churnerTagDetails = new Map<string, {
       tag_id: number
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
       profiles: string[]
     }>()
 
-    churners.forEach(profile => {
+    churnerProfiles.forEach(profile => {
       profile.tags.forEach(profileTag => {
         const tagName = profileTag.tag.tag_name
         const currentCount = churnerTagCounts.get(tagName) || 0
@@ -157,7 +157,7 @@ export async function GET(request: Request) {
       })
     })
 
-    // Filter by minimum count and prepare word cloud data
+    // Filter by minimum tag occurrence count and prepare word cloud data
     const followerWordCloudData = Array.from(followerTagCounts.entries())
       .filter(([_, count]) => count >= minTagCount)
       .map(([text, value]) => ({ text, value }))
@@ -168,7 +168,7 @@ export async function GET(request: Request) {
       .map(([text, value]) => ({ text, value }))
       .sort((a, b) => b.value - a.value)
 
-    // Prepare detailed tag lists
+    // Prepare detailed tag lists showing occurrence counts and percentages
     const followerTagList = Array.from(followerTagDetails.entries())
       .filter(([_, details]) => details.count >= minTagCount)
       .map(([tagName, details]) => ({
@@ -177,7 +177,7 @@ export async function GET(request: Request) {
         count: details.count,
         auto_assigned_count: details.auto_assigned_count,
         manual_count: details.manual_count,
-        percentage: Math.round((details.count / followers.length) * 100),
+        percentage: Math.round((details.count / followerProfiles.length) * 100),
         profiles: details.profiles.slice(0, 10) // Limit to first 10 for performance
       }))
       .sort((a, b) => b.count - a.count)
@@ -190,12 +190,12 @@ export async function GET(request: Request) {
         count: details.count,
         auto_assigned_count: details.auto_assigned_count,
         manual_count: details.manual_count,
-        percentage: Math.round((details.count / churners.length) * 100),
+        percentage: Math.round((details.count / churnerProfiles.length) * 100),
         profiles: details.profiles.slice(0, 10) // Limit to first 10 for performance
       }))
       .sort((a, b) => b.count - a.count)
 
-    // Calculate comparison metrics
+    // Calculate comparison metrics between follower and churner tag patterns
     const allTags = new Set([
       ...followerTagCounts.keys(),
       ...churnerTagCounts.keys()
@@ -204,8 +204,8 @@ export async function GET(request: Request) {
     const comparisonData = Array.from(allTags).map(tagName => {
       const followerCount = followerTagCounts.get(tagName) || 0
       const churnerCount = churnerTagCounts.get(tagName) || 0
-      const followerPercentage = followers.length > 0 ? (followerCount / followers.length) * 100 : 0
-      const churnerPercentage = churners.length > 0 ? (churnerCount / churners.length) * 100 : 0
+      const followerPercentage = followerProfiles.length > 0 ? (followerCount / followerProfiles.length) * 100 : 0
+      const churnerPercentage = churnerProfiles.length > 0 ? (churnerCount / churnerProfiles.length) * 100 : 0
       
       return {
         tag_name: tagName,
@@ -220,17 +220,17 @@ export async function GET(request: Request) {
     .filter(item => item.total_count >= minTagCount)
     .sort((a, b) => b.total_count - a.total_count)
 
-    // Summary statistics
+    // Summary statistics: distinct profile counts vs tag occurrence metrics
     const summary = {
-      total_followers: followers.length,
-      total_churners: churners.length,
-      total_unique_follower_tags: followerWordCloudData.length,
-      total_unique_churner_tags: churnerWordCloudData.length,
-      total_unique_tags: allTags.size,
-      follower_avg_tags_per_profile: followers.length > 0 ? 
-        Math.round((followers.reduce((sum, p) => sum + p.tags.length, 0) / followers.length) * 100) / 100 : 0,
-      churner_avg_tags_per_profile: churners.length > 0 ? 
-        Math.round((churners.reduce((sum, p) => sum + p.tags.length, 0) / churners.length) * 100) / 100 : 0,
+      total_followers: followerProfiles.length,        // Number of distinct people who followed
+      total_churners: churnerProfiles.length,          // Number of distinct people who churned
+      total_unique_follower_tags: followerWordCloudData.length, // Number of distinct tags among followers
+      total_unique_churner_tags: churnerWordCloudData.length,   // Number of distinct tags among churners
+      total_unique_tags: allTags.size,                 // Total distinct tags across both groups
+      follower_avg_tags_per_profile: followerProfiles.length > 0 ?
+        Math.round((followerProfiles.reduce((sum, p) => sum + p.tags.length, 0) / followerProfiles.length) * 100) / 100 : 0,
+      churner_avg_tags_per_profile: churnerProfiles.length > 0 ?
+        Math.round((churnerProfiles.reduce((sum, p) => sum + p.tags.length, 0) / churnerProfiles.length) * 100) / 100 : 0,
       date_range: {
         start_date: startDate.toISOString(),
         end_date: endDate.toISOString(),
@@ -243,12 +243,12 @@ export async function GET(request: Request) {
       followers: {
         word_cloud_data: followerWordCloudData,
         tag_list: followerTagList,
-        total_profiles: followers.length
+        total_profiles: followerProfiles.length
       },
       churners: {
         word_cloud_data: churnerWordCloudData,
         tag_list: churnerTagList,
-        total_profiles: churners.length
+        total_profiles: churnerProfiles.length
       },
       comparison: comparisonData
     })
