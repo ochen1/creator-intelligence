@@ -101,10 +101,16 @@ export function ProfileIdentification() {
       const next = new Map(prev)
       for (const p of profiles) {
         if (!next.has(p.profile_pk)) {
+          const autoAssignedLabels = p.tags
+            ?.filter(t => t.auto_assigned)
+            .map(t => t.tag.tag_name) || []
+          const hasAuto = autoAssignedLabels.length > 0
           next.set(p.profile_pk, {
             profile_pk: p.profile_pk,
             username: p.current_username,
-            status: 'pending',
+            status: hasAuto ? 'completed' : 'pending',
+            // Pre-populate labels for display if already auto-tagged
+            ...(hasAuto ? { labels: autoAssignedLabels } : {}),
           })
         }
       }
