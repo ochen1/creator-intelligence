@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { Upload, FileImage, FileText, Sparkles, Hash, AtSign, Palette, Download, RefreshCw, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { generateFileHash, getCachedAnalysis, setCachedAnalysis, getCacheStats, clearCache } from '@/lib/cache'
 
 interface ColorPalette {
   hex: string
@@ -35,6 +36,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
   const [brandAnalysis, setBrandAnalysis] = useState<string[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isFromCache, setIsFromCache] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -89,6 +91,24 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
     setIsAnalyzing(true)
     
     try {
+      // Generate file hash for caching
+      const fileHash = await generateFileHash(file)
+      
+      // Check if we have cached results
+      const cachedResult = getCachedAnalysis(fileHash)
+      if (cachedResult) {
+        console.log('Using cached analysis result')
+        setSuggestions(cachedResult.suggestions || [])
+        setColorPalette(cachedResult.colorPalette || [])
+        setBrandAnalysis(cachedResult.brandAnalysis || [])
+        setIsFromCache(true)
+        toast.success('Content analyzed successfully! (from cache)')
+        setIsAnalyzing(false)
+        return
+      }
+      
+      // If no cache, make API call
+      console.log('No cached result found, making API call')
       const formData = new FormData()
       formData.append('file', file)
       
@@ -112,9 +132,19 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
       
       // Handle both direct data and nested data structure
       const responseData = data.data || data
-      setSuggestions(responseData.suggestions || [])
-      setColorPalette(responseData.colorPalette || [])
-      setBrandAnalysis(responseData.brandAnalysis || [])
+      const analysisResult = {
+        suggestions: responseData.suggestions || [],
+        colorPalette: responseData.colorPalette || [],
+        brandAnalysis: responseData.brandAnalysis || []
+      }
+      
+      // Cache the result
+      setCachedAnalysis(fileHash, file.name, file.size, analysisResult)
+      
+      setSuggestions(analysisResult.suggestions)
+      setColorPalette(analysisResult.colorPalette)
+      setBrandAnalysis(analysisResult.brandAnalysis)
+      setIsFromCache(false)
       
       toast.success('Content analyzed successfully!')
     } catch (error) {
@@ -164,6 +194,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
     setSuggestions([])
     setColorPalette([])
     setBrandAnalysis([])
+    setIsFromCache(false)
   }
 
   const getSuggestionIcon = (type: string) => {
@@ -371,7 +402,14 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
         {/* AI Content Suggestions */}
         {suggestions.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-lg font-semibold text-brand-primary">AI Content Suggestions</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-brand-primary">AI Content Suggestions</h3>
+              {isFromCache && (
+                <Badge variant="outline" className="text-xs text-brand-primary border-brand-primary">
+                  📦 From Cache
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
               Based off what we've seen, we have prepared some suggestions for you on how you can improve your profile
             </p>
@@ -428,6 +466,27 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
             </Button>
           </div>
         )}
+
+        {/* Cache Management */}
+        <div className="pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">Cache Status:</span> {getCacheStats().totalEntries} entries stored
+              {isFromCache && <span className="ml-2 text-brand-primary">• Current result from cache</span>}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                clearCache()
+                toast.success('Cache cleared successfully')
+              }}
+              className="text-xs"
+            >
+              Clear Cache
+            </Button>
+          </div>
+        </div>
     </div>
   )
 }
