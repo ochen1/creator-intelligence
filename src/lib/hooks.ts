@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import * as React from 'react'
 
 // Types
 export type Tag = {
@@ -508,4 +509,336 @@ export function useTagAnalytics(params: {
     queryKey: ['tag-analytics', params],
     queryFn: () => api.fetchTagAnalytics(params)
   })
+}
+
+/* ----------------------------------------------------------------------- *
+ * Agentic Swarm Hooks
+ * ----------------------------------------------------------------------- */
+
+/**
+ * useSwarmPlan
+ * POST /api/agent/swarm/plan with { prompt }
+ * Returns mutation that resolves: { planId, plan }
+ */
+export function useSwarmPlan() {
+  return useMutation<{
+    planId: string
+    plan: any
+  }, Error, string>({
+    mutationFn: async (prompt: string) => {
+      const res = await fetch('/api/agent/swarm/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      if (!res.ok) {
+        let detail = ''
+        try {
+          const j = await res.json()
+          detail = j?.error?.detail || j?.error?.message || res.statusText
+        } catch {
+          detail = res.statusText
+        }
+        throw new Error(`Plan failed: ${detail}`)
+      }
+      const data = await res.json()
+      return data.data
+    },
+  })
+}
+
+/**
+ * Types for execution state
+ */
+interface SwarmExecutionArtifact {
+  artifactId: string
+  filename: string
+  warnings?: string[]
+}
+
+interface SwarmExecutionState {
+  status: 'idle' | 'executing' | 'completed' | 'error'
+  plan?: any
+  steps: Record<string, any>
+  artifacts: SwarmExecutionArtifact[]
+  error?: string
+  startedAt?: number
+  durationMs?: number
+}
+
+interface StartExecutionPayload {
+  planId?: string
+  prompt?: string
+}
+
+interface UseSwarmExecuteReturn {
+  state: SwarmExecutionState
+  start: (payload: StartExecutionPayload) => void
+  reset: () => void
+  abort: () => void
+}
+
+/**
+ * useSwarmExecute
+ * Starts SSE execution via POST /api/agent/swarm/execute
+ * Exposes streaming state.
+ */
+export function useSwarmExecute(): UseSwarmExecuteReturn {
+  const [state, setState] = React.useState<SwarmExecutionState>({
+    status: 'idle',
+    steps: {},
+    artifacts: [],
+  })
+
+  const abortRef = React.useRef<AbortController | null>(null)
+  const readerRef = React.useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
+  const bufferRef = React.useRef<string>('')
+
+  const reset = React.useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+    }
+    abortRef.current = null
+    readerRef.current = null
+    bufferRef.current = ''
+    setState({
+      status: 'idle',
+      steps: {},
+      artifacts: [],
+    })
+  }, [])
+
+  const abort = React.useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+    }
+    setState(s => ({
+      ...s,
+      status: s.status === 'executing' ? 'error' : s.status,
+      error: s.status === 'executing' ? (s.error || 'Execution aborted by user') : s.error,
+    }))
+  }, [])
+
+  const processEvent = React.useCallback((eventName: string, payload: any) => {
+    setState(prev => {
+      const next = { ...prev }
+      switch (eventName) {
+        case 'plan_created': {
+          next.plan = payload.plan
+          // Initialize steps map for quick updates
+            if (payload.plan?.steps) {
+              const steps: Record<string, any> = {}
+              for (const st of payload.plan.steps) {
+                steps[st.id] = st
+              }
+              next.steps = { ...next.steps, ...steps }
+            }
+          break
+        }
+        case 'step_started': {
+          const { stepId } = payload
+          const existing = next.steps[stepId] || {}
+          next.steps = {
+            ...next.steps,
+            [stepId]: {
+              ...existing,
+              id: stepId,
+              kind: payload.kind,
+              title: payload.title,
+              status: 'RUNNING',
+            },
+          }
+          break
+        }
+        case 'step_result': {
+          const { stepId } = payload
+          const existing = next.steps[stepId] || {}
+          next.steps = {
+            ...next.steps,
+            [stepId]: {
+              ...existing,
+              id: stepId,
+              kind: payload.kind ?? existing.kind,
+              title: existing.title,
+              status: payload.status || existing.status,
+              outputSummary: payload.outputSummary,
+              resultSnippet: payload.resultSnippet,
+              error: payload.error,
+            },
+          }
+          break
+        }
+        case 'artifact_ready': {
+          const art: SwarmExecutionArtifact = {
+            artifactId: payload.artifactId,
+            filename: payload.filename,
+          }
+          // Attach artifact id to producing step
+          if (payload.stepId && next.steps[payload.stepId]) {
+            const step = next.steps[payload.stepId]
+            const produced = Array.isArray(step.producedArtifactIds) ? step.producedArtifactIds.slice() : []
+            if (!produced.includes(art.artifactId)) produced.push(art.artifactId)
+            next.steps = {
+              ...next.steps,
+              [payload.stepId]: {
+                ...step,
+                producedArtifactIds: produced,
+              },
+            }
+          }
+          next.artifacts = [...next.artifacts, art]
+          break
+        }
+        case 'completed': {
+          next.status = 'completed'
+          next.plan = payload.plan || next.plan
+          next.durationMs = payload.durationMs
+          break
+        }
+        case 'error': {
+          // If still executing, transition to error
+          if (next.status !== 'completed') {
+            next.status = 'error'
+            next.error = payload.message || 'Unknown execution error'
+          }
+          break
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const parseSSEChunk = React.useCallback((chunk: string) => {
+    // Append to buffer
+    bufferRef.current += chunk
+    let idx: number
+    while ((idx = bufferRef.current.indexOf('\n\n')) !== -1) {
+      const rawEvent = bufferRef.current.slice(0, idx)
+      bufferRef.current = bufferRef.current.slice(idx + 2)
+      // Ignore comments
+      if (!rawEvent.trim() || rawEvent.startsWith(':')) continue
+      const lines = rawEvent.split('\n')
+      let eventName = 'message'
+      const dataLines: string[] = []
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim())
+        }
+      }
+      const dataStr = dataLines.join('\n')
+      let parsed: any = null
+      if (dataStr) {
+        try {
+          parsed = JSON.parse(dataStr)
+        } catch {
+          // Non-JSON payload; ignore
+        }
+      }
+      processEvent(eventName, parsed)
+      if (eventName === 'completed' || eventName === 'error') {
+        // We consider stream finished; abort controller (will cause reader loop to exit)
+        if (abortRef.current) abortRef.current.abort()
+      }
+    }
+  }, [processEvent])
+
+  const start = React.useCallback((payload: StartExecutionPayload) => {
+    if (!payload.planId && !payload.prompt) {
+      throw new Error('start requires planId or prompt')
+    }
+    // Prevent concurrent starts
+    setState(s => {
+      if (s.status === 'executing') return s
+      return {
+        ...s,
+        status: 'executing',
+        error: undefined,
+        artifacts: [],
+        durationMs: undefined,
+        startedAt: Date.now(),
+      }
+    })
+
+    // Abort existing if any
+    if (abortRef.current) {
+      abortRef.current.abort()
+    }
+    const abortCtrl = new AbortController()
+    abortRef.current = abortCtrl
+    bufferRef.current = ''
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/agent/swarm/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: abortCtrl.signal,
+        })
+        if (!res.ok || !res.body) {
+          processEvent('error', { message: `Execute request failed (${res.status})` })
+          return
+        }
+        const reader = res.body.getReader()
+        readerRef.current = reader
+        const decoder = new TextDecoder()
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            const text = decoder.decode(value, { stream: true })
+            parseSSEChunk(text)
+          }
+        }
+      } catch (e: any) {
+        if (abortCtrl.signal.aborted) {
+          // Aborted intentionally
+          return
+        }
+        processEvent('error', { message: e?.message || 'Stream error' })
+      }
+    })()
+  }, [parseSSEChunk, processEvent])
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort()
+    }
+  }, [])
+
+  return {
+    state,
+    start,
+    reset,
+    abort,
+  }
+}
+
+/**
+ * Returns a HEAD fetcher for artifact metadata (not heavily used yet)
+ */
+export function useReportHead() {
+  return React.useCallback(async (artifactId: string) => {
+    const res = await fetch(`/api/reports/${encodeURIComponent(artifactId)}`, {
+      method: 'HEAD',
+    })
+    if (!res.ok) throw new Error('Artifact not found')
+    return {
+      contentType: res.headers.get('content-type'),
+      contentLength: res.headers.get('content-length'),
+      filename: res.headers.get('x-artifact-filename'),
+    }
+  }, [])
+}
+
+/**
+ * Returns a helper to build download URL for artifact id.
+ */
+export function useReportDownloadUrl() {
+  return React.useCallback((artifactId: string) => {
+    return `/api/reports/${encodeURIComponent(artifactId)}`
+  }, [])
 }

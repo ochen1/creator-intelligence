@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
+import { SwarmCommand } from '@/components/SwarmCommand'
 
 export default function HomePage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
@@ -44,11 +45,12 @@ export default function HomePage() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Tag Analytics</TabsTrigger>
-          <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
-          <TabsTrigger value="audience">Audience Management</TabsTrigger>
-          <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
+            <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
+            <TabsTrigger value="audience">Audience Management</TabsTrigger>
+            <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
+            <TabsTrigger value="swarm">Agentic Swarm</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -97,6 +99,16 @@ export default function HomePage() {
           <div className="grid gap-6">
             <ProfileIdentification />
           </div>
+        </TabsContent>
+
+        <TabsContent value="swarm" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Agentic Swarm Execution</h2>
+            <p className="text-muted-foreground">
+              Plan and execute multi-step data query, enrichment, and reporting workflows with streaming progress.
+            </p>
+          </div>
+          <SwarmCommand />
         </TabsContent>
       </Tabs>
 
