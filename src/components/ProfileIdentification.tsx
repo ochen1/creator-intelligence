@@ -138,7 +138,7 @@ export function ProfileIdentification() {
     async (p: RecentProfile): Promise<void> => {
       updateRun(p.profile_pk, {
         status: 'running',
-        startedAt: Date.now(),
+        startedAt: typeof window !== 'undefined' ? Date.now() : 0,
         error: undefined,
         labels: undefined,
         newAssignments: 0,
@@ -169,8 +169,8 @@ export function ProfileIdentification() {
             status: 'skipped',
             labels: [],
             classifierText,
-            endedAt: Date.now(),
-            durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+            endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+            durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
           })
           return
         }
@@ -243,8 +243,8 @@ export function ProfileIdentification() {
           classifierText,
           newTagsCreated: createdTags,
           newAssignments,
-          endedAt: Date.now(),
-          durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+          endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+          durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
         })
       } catch (err: any) {
         updateRun(p.profile_pk, {
@@ -252,8 +252,8 @@ export function ProfileIdentification() {
           error: err?.message || 'Unknown error',
           labels,
           classifierText,
-          endedAt: Date.now(),
-          durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+          endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+          durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
         })
       }
     },
@@ -479,7 +479,7 @@ export function ProfileIdentification() {
                 if (run?.startedAt && run?.endedAt) {
                   durationDisplay = formatSeconds(run.endedAt - run.startedAt)
                 } else if (run?.startedAt && run?.status === 'running') {
-                  durationDisplay = formatSeconds(Date.now() - run.startedAt)
+                  durationDisplay = formatSeconds(typeof window !== 'undefined' ? Date.now() - run.startedAt : 0)
                 }
 
                 let statusNode: React.ReactNode = run?.status || 'pending'

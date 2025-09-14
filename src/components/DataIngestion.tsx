@@ -98,7 +98,7 @@ export function DataIngestion() {
     // Update status to processing
     setFiles(prev => prev.map(f => 
       f.id === processedFile.id 
-        ? { ...f, status: 'processing' as FileStatus, startTime: Date.now() }
+        ? { ...f, status: 'processing' as FileStatus, startTime: typeof window !== 'undefined' ? Date.now() : 0 }
         : f
     ))
 
@@ -195,7 +195,7 @@ export function DataIngestion() {
       // Update status to success
       setFiles(prev => prev.map(f => 
         f.id === processedFile.id 
-          ? { ...f, status: 'success' as FileStatus, result, endTime: Date.now() }
+          ? { ...f, status: 'success' as FileStatus, result, endTime: typeof window !== 'undefined' ? Date.now() : 0 }
           : f
       ))
 
@@ -207,7 +207,7 @@ export function DataIngestion() {
       // Update status to error
       setFiles(prev => prev.map(f => 
         f.id === processedFile.id 
-          ? { ...f, status: 'error' as FileStatus, error: errorMessage, endTime: Date.now() }
+          ? { ...f, status: 'error' as FileStatus, error: errorMessage, endTime: typeof window !== 'undefined' ? Date.now() : 0 }
           : f
       ))
 
@@ -350,7 +350,7 @@ export function DataIngestion() {
 
   const getProcessingTime = (file: ProcessedFile) => {
     if (!file.startTime) return null
-    const endTime = file.endTime || Date.now()
+    const endTime = file.endTime || (typeof window !== 'undefined' ? Date.now() : 0)
     const duration = Math.round((endTime - file.startTime) / 1000)
     return `${duration}s`
   }
