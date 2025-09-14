@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { CampaignManager } from '@/components/CampaignManager'
+import { TagAnalyticsDashboard } from '@/components/TagAnalyticsDashboard'
 import { ProfileList } from '@/components/ProfileList'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { BulkProfilesAttributionSheet } from '@/components/BulkProfilesAttributionSheet'
@@ -10,11 +11,14 @@ import { ProfileIdentification } from '@/components/ProfileIdentification'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
 
 export default function HomePage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
   const [selectedProfilePks, setSelectedProfilePks] = useState<number[]>([])
   const [bulkAttributionOpen, setBulkAttributionOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
 
   const clearSelection = () => {
     setSelectedProfilePks([])
@@ -38,24 +42,63 @@ export default function HomePage() {
       
       <Separator />
 
-      {/* Campaign Management */}
-      <CampaignManager />
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Tag Analytics</TabsTrigger>
+          <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
+          <TabsTrigger value="audience">Audience Management</TabsTrigger>
+          <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
+        </TabsList>
 
-      <Separator />
+        <TabsContent value="overview" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Tag Analytics Dashboard</h2>
+            <p className="text-muted-foreground">
+              Analyze tag patterns and word clouds for followers vs churners to understand audience segments and engagement patterns.
+            </p>
+          </div>
+          <CampaignAnalyticsDashboard />
+          <TagAnalyticsDashboard />
+        </TabsContent>
 
-      {/* Profile Management */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Audience Management</h2>
-        </div>
+        <TabsContent value="campaigns" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Campaign Management</h2>
+            <p className="text-muted-foreground">
+              Create and manage your content and outbound follow campaigns for tracking attribution.
+            </p>
+          </div>
+          <CampaignManager />
+        </TabsContent>
 
-        <ProfileList
-          onSelectProfile={(username) => setSelectedUsername(username)}
-          selectedProfilePks={selectedProfilePks}
-          onSelectionChange={setSelectedProfilePks}
-          onBulkAttribution={() => setBulkAttributionOpen(true)}
-        />
-      </div>
+        <TabsContent value="audience" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Audience Management</h2>
+            <p className="text-muted-foreground">
+              Manage your audience profiles, tags, and track engagement patterns.
+            </p>
+          </div>
+          <ProfileList
+            onSelectProfile={(username) => setSelectedUsername(username)}
+            selectedProfilePks={selectedProfilePks}
+            onSelectionChange={setSelectedProfilePks}
+            onBulkAttribution={() => setBulkAttributionOpen(true)}
+          />
+        </TabsContent>
+
+        <TabsContent value="attribution" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Attribution Tracking</h2>
+            <p className="text-muted-foreground">
+              Review and manage attribution assignments for recent profile interactions.
+            </p>
+          </div>
+          <div className="grid gap-6">
+            <ProfileIdentification />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Profile Detail Sheet */}
       <ProfileSheet

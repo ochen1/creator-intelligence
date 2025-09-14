@@ -261,6 +261,38 @@ export const api = {
       body: JSON.stringify({ tagId })
     })
     if (!res.ok) throw new Error('Failed to remove tag from profile')
+  },
+
+  // Campaign Analytics
+  fetchCampaignAnalytics: async (params: {
+    campaignId?: number;
+    dateRange?: number;
+    timeZone?: string
+  } = {}): Promise<any> => {
+    const searchParams = new URLSearchParams()
+    if (params.campaignId) searchParams.set('campaignId', String(params.campaignId))
+    if (params.dateRange) searchParams.set('dateRange', String(params.dateRange))
+    if (params.timeZone) searchParams.set('timeZone', params.timeZone)
+    
+    const res = await fetch(`/api/campaigns/analytics?${searchParams.toString()}`)
+    if (!res.ok) throw new Error('Failed to fetch campaign analytics')
+    const response = await res.json()
+    return response.data
+  },
+
+  // Tag Analytics
+  fetchTagAnalytics: async (params: {
+    dateRange?: number;
+    minTagCount?: number
+  } = {}): Promise<any> => {
+    const searchParams = new URLSearchParams()
+    if (params.dateRange) searchParams.set('dateRange', String(params.dateRange))
+    if (params.minTagCount) searchParams.set('minTagCount', String(params.minTagCount))
+    
+    const res = await fetch(`/api/tags/analytics?${searchParams.toString()}`)
+    if (!res.ok) throw new Error('Failed to fetch tag analytics')
+    const response = await res.json()
+    return response.data
   }
 }
 
@@ -455,4 +487,25 @@ export function useProfileTagMutations() {
   })
 
   return { addTag, removeTag }
+}
+
+export function useCampaignAnalytics(params: {
+  campaignId?: number;
+  dateRange?: number;
+  timeZone?: string
+} = {}) {
+  return useQuery({
+    queryKey: ['campaign-analytics', params],
+    queryFn: () => api.fetchCampaignAnalytics(params)
+  })
+}
+
+export function useTagAnalytics(params: {
+  dateRange?: number;
+  minTagCount?: number
+} = {}) {
+  return useQuery({
+    queryKey: ['tag-analytics', params],
+    queryFn: () => api.fetchTagAnalytics(params)
+  })
 }
