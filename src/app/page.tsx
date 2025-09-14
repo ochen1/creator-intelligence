@@ -8,6 +8,9 @@ import { ProfileSheet } from '@/components/ProfileSheet'
 import { BulkProfilesAttributionSheet } from '@/components/BulkProfilesAttributionSheet'
 import { DataIngestion } from '@/components/DataIngestion'
 import { ProfileIdentification } from '@/components/ProfileIdentification'
+import { SwarmCommand } from '@/components/SwarmCommand'
+import { PreCampaignAgents } from '@/components/PreCampaignAgents'
+import { PostCampaignAgents } from '@/components/PostCampaignAgents'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,11 +30,16 @@ export default function HomePage() {
   return (
     <main className="container mx-auto py-8 space-y-8">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold">Creator Intelligence Platform</h1>
-        <p className="text-lg text-muted-foreground">
-          Local-first audience intelligence platform for Instagram creators
-        </p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold">Creator Intelligence Platform</h1>
+            <p className="text-lg text-muted-foreground">
+              Local-first audience intelligence platform for Instagram creators
+            </p>
+          </div>
+          <SwarmCommand />
+        </div>
       </div>
 
       {/* Data Ingestion */}
@@ -44,11 +52,12 @@ export default function HomePage() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Tag Analytics</TabsTrigger>
           <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
           <TabsTrigger value="audience">Audience Management</TabsTrigger>
           <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
+          <TabsTrigger value="agents">Agentic Workflows</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -97,6 +106,27 @@ export default function HomePage() {
           <div className="grid gap-6">
             <ProfileIdentification />
           </div>
+        </TabsContent>
+
+        <TabsContent value="agents" className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold">Agentic Workflows</h2>
+            <p className="text-muted-foreground">
+              AI-powered agents to optimize campaigns and analyze performance patterns.
+            </p>
+          </div>
+          <Tabs defaultValue="pre-campaign" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="pre-campaign">Pre-Campaign</TabsTrigger>
+              <TabsTrigger value="post-campaign">Post-Campaign</TabsTrigger>
+            </TabsList>
+            <TabsContent value="pre-campaign">
+              <PreCampaignAgents />
+            </TabsContent>
+            <TabsContent value="post-campaign">
+              <PostCampaignAgents />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
 
