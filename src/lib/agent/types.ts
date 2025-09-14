@@ -27,6 +27,8 @@ import { z } from 'zod'
 export enum StepKind {
   QUERY_DATA = 'QUERY_DATA',
   ENRICH_PROFILE = 'ENRICH_PROFILE',
+  LINKEDIN_RESEARCH = 'LINKEDIN_RESEARCH',
+  GENERATE_OUTREACH = 'GENERATE_OUTREACH',
   REPORT = 'REPORT',
 }
 
@@ -91,6 +93,34 @@ export const EnrichProfileParamsSchema = z.object({
     .describe('Optional cap to avoid runaway enrichment'),
 })
 
+export const LinkedInResearchParamsSchema = z.object({
+  sourceStepId: z.string()
+    .describe('ID of a previous DATA step supplying usernames'),
+  usernameField: z.string().default('current_username')
+    .describe('Field name in previous step output containing username strings'),
+  tags: z.union([z.string(), z.array(z.string())]).optional()
+    .describe('Tags to include in LinkedIn API requests'),
+  maxProfiles: z.number().int().positive().max(500).optional()
+    .describe('Optional cap to avoid runaway LinkedIn requests'),
+})
+
+export const GenerateOutreachParamsSchema = z.object({
+  sourceStepId: z.string()
+    .describe('ID of a previous LINKEDIN_RESEARCH step supplying summaries'),
+  messageTemplate: z.string().default('generic_professional')
+    .describe('Message template type (gaming_partnership, tech_collaboration, etc.)'),
+  tone: z.string().default('professional')
+    .describe('Message tone (professional, casual, friendly, etc.)'),
+  companyName: z.string().optional()
+    .describe('Sender company name for personalization'),
+  senderName: z.string().optional()
+    .describe('Sender name for personalization'),
+  customPrompt: z.string().optional()
+    .describe('Custom LLM prompt to override default template'),
+  maxMessages: z.number().int().positive().max(200).optional()
+    .describe('Optional cap on number of messages to generate'),
+})
+
 export const ReportParamsSchema = z.object({
   sourceStepIds: z.array(z.string()).min(1)
     .describe('Step IDs whose outputs get merged / referenced for report'),
@@ -133,6 +163,16 @@ const EnrichProfileStepSchema = BaseStepSchema.extend({
   params: EnrichProfileParamsSchema,
 })
 
+const LinkedInResearchStepSchema = BaseStepSchema.extend({
+  kind: z.literal(StepKind.LINKEDIN_RESEARCH),
+  params: LinkedInResearchParamsSchema,
+})
+
+const GenerateOutreachStepSchema = BaseStepSchema.extend({
+  kind: z.literal(StepKind.GENERATE_OUTREACH),
+  params: GenerateOutreachParamsSchema,
+})
+
 const ReportStepSchema = BaseStepSchema.extend({
   kind: z.literal(StepKind.REPORT),
   params: ReportParamsSchema,
@@ -141,6 +181,8 @@ const ReportStepSchema = BaseStepSchema.extend({
 export const StepSchema = z.discriminatedUnion('kind', [
   QueryDataStepSchema,
   EnrichProfileStepSchema,
+  LinkedInResearchStepSchema,
+  GenerateOutreachStepSchema,
   ReportStepSchema,
 ])
 
@@ -177,6 +219,20 @@ export function validatePlan(raw: unknown): Plan {
         )
       }
     }
+    if (step.kind === StepKind.LINKEDIN_RESEARCH) {
+      if (!stepIds.has(step.params.sourceStepId)) {
+        throw new Error(
+          `LINKEDIN_RESEARCH step "${step.id}" references missing sourceStepId "${step.params.sourceStepId}"`,
+        )
+      }
+    }
+    if (step.kind === StepKind.GENERATE_OUTREACH) {
+      if (!stepIds.has(step.params.sourceStepId)) {
+        throw new Error(
+          `GENERATE_OUTREACH step "${step.id}" references missing sourceStepId "${step.params.sourceStepId}"`,
+        )
+      }
+    }
     if (step.kind === StepKind.REPORT) {
       for (const sid of step.params.sourceStepIds) {
         if (!stepIds.has(sid)) {
@@ -202,6 +258,12 @@ export function deriveDependencies(plan: Plan): Record<string, Set<string>> {
   }
   for (const s of plan.steps) {
     if (s.kind === StepKind.ENRICH_PROFILE) {
+      deps[s.id].add(s.params.sourceStepId)
+    }
+    if (s.kind === StepKind.LINKEDIN_RESEARCH) {
+      deps[s.id].add(s.params.sourceStepId)
+    }
+    if (s.kind === StepKind.GENERATE_OUTREACH) {
       deps[s.id].add(s.params.sourceStepId)
     }
     if (s.kind === StepKind.REPORT) {

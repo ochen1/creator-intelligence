@@ -25,6 +25,9 @@
  *       Params:
  *         days?: number (default 30)
  *         limit?: number (default 100)
+ *   - profile_by_username
+ *       Params:
+ *         username: string (required)
  *
  * RETURN SHAPE:
  *   {
@@ -100,6 +103,7 @@ const DEFAULT_LIMITS: Record<string, number> = {
   profiles_with_tag: 200,
   top_profiles_by_campaign: 50,
   high_engagement_recent: 100,
+  profile_by_username: 1,
 }
 
 const SOFT_LIMIT_CAP = 10_000
@@ -421,6 +425,42 @@ async function intent_high_engagement_recent(params: any, limit: number): Promis
   })
 }
 
+async function intent_profile_by_username(params: any, limit: number): Promise<QueryResultRow[]> {
+  const username = typeof params?.username === 'string' ? params.username.trim() : ''
+  if (!username) throw new QueryToolError('INVALID_PARAM', 'profile_by_username requires "username" parameter')
+  
+  console.log(`[DEBUG] Searching for profile with username: "${username}"`)
+  
+  const rows = await prisma.profile.findMany({
+    where: {
+      current_username: {
+        contains: username
+      }
+    },
+    orderBy: { first_seen_ts: 'desc' },
+    take: limit,
+    include: {
+      tags: { include: { tag: true } },
+      interaction_events: {
+        orderBy: { event_ts: 'desc' },
+        take: 1,
+        select: { event_ts: true },
+      },
+    },
+  })
+  
+  console.log(`[DEBUG] Found ${rows.length} profiles matching "${username}":`, rows.map(r => r.current_username))
+  
+  return rows.map((p: any) => ({
+    current_username: p.current_username,
+    first_seen_ts: p.first_seen_ts.toISOString(),
+    last_event_ts: p.interaction_events[0]?.event_ts?.toISOString() || null,
+    tag_names: p.tags.map((t: any) => t.tag.tag_name),
+    is_active_follower: p.is_active_follower,
+    is_currently_following: p.is_currently_following,
+  }))
+}
+
 /* ---------------------------------- *
  * Dispatcher
  * ---------------------------------- */
@@ -431,6 +471,7 @@ const INTENT_DISPATCH: Record<string, (params: any, limit: number) => Promise<Qu
   profiles_with_tag: intent_profiles_with_tag,
   top_profiles_by_campaign: intent_top_profiles_by_campaign,
   high_engagement_recent: intent_high_engagement_recent,
+  profile_by_username: intent_profile_by_username,
 }
 
 export interface QueryLocalDatabaseParams {

@@ -49,12 +49,35 @@ export const PLAN_JSON_SCHEMA_SNIPPET = `
       }
     },
     {
+      "id": "linkedin_step",
+      "kind": "LINKEDIN_RESEARCH",
+      "title": "Get LinkedIn summaries",
+      "params": {
+        "sourceStepId": "query_step_1",
+        "usernameField": "current_username",
+        "tags": "gaming,influencer",
+        "maxProfiles": 30
+      }
+    },
+    {
+      "id": "outreach_step",
+      "kind": "GENERATE_OUTREACH",
+      "title": "Generate personalized outreach",
+      "params": {
+        "sourceStepId": "linkedin_step",
+        "messageTemplate": "gaming_partnership",
+        "tone": "professional",
+        "companyName": "Our Company",
+        "maxMessages": 25
+      }
+    },
+    {
       "id": "report_step",
       "kind": "REPORT",
       "title": "Generate CSV report",
       "params": {
-        "sourceStepIds": ["query_step_1","enrich_step"],
-        "columns": ["current_username","followers","raw_text"],
+        "sourceStepIds": ["query_step_1","linkedin_step","outreach_step"],
+        "columns": ["current_username","linkedin_summary","outreach_message"],
         "filename": "profiles_report.csv",
         "format": "CSV"
       }
@@ -70,9 +93,11 @@ export const PLAN_JSON_SCHEMA_SNIPPET = `
 const SAFETY_DIRECTIVES = `
 DO NOT invent SQL.
 NEVER include raw SQL or semicolons.
-Use only allowed step kinds: QUERY_DATA, ENRICH_PROFILE, REPORT.
-If user asks for something unrelated to data or enrichment, still attempt a structured plan if possible or explain minimal plan with a single REPORT referencing no data (rare).
+Use only allowed step kinds: QUERY_DATA, ENRICH_PROFILE, LINKEDIN_RESEARCH, GENERATE_OUTREACH, REPORT.
+If user asks for something unrelated to data or research, still attempt a structured plan if possible or explain minimal plan with a single REPORT referencing no data (rare).
 Keep plan minimal: only essential steps.
+LINKEDIN_RESEARCH requires a sourceStepId from QUERY_DATA.
+GENERATE_OUTREACH requires a sourceStepId from LINKEDIN_RESEARCH.
 `.trim()
 
 /* ---------------------------------- *
@@ -198,6 +223,63 @@ const FEW_SHOT_3_PLAN = `
 }
 `.trim()
 
+const FEW_SHOT_4_USER = `Find recent gaming influencers, get their LinkedIn summaries, and generate personalized cold outreach messages for a gaming startup partnership.`
+const FEW_SHOT_4_PLAN = `
+{
+  "planId": "gaming_outreach_plan",
+  "objective": "Find gaming influencers, research LinkedIn, generate outreach messages",
+  "steps": [
+    {
+      "id": "query_gaming_influencers",
+      "kind": "QUERY_DATA",
+      "title": "Find recent gaming influencers",
+      "params": {
+        "intent": "recent_gaming_profiles",
+        "limit": 25,
+        "filters": {
+          "tag": "gaming"
+        }
+      }
+    },
+    {
+      "id": "linkedin_research_gaming",
+      "kind": "LINKEDIN_RESEARCH",
+      "title": "Get LinkedIn summaries",
+      "params": {
+        "sourceStepId": "query_gaming_influencers",
+        "usernameField": "current_username",
+        "tags": "gaming,influencer,partnership",
+        "maxProfiles": 20
+      }
+    },
+    {
+      "id": "generate_outreach_messages",
+      "kind": "GENERATE_OUTREACH",
+      "title": "Create personalized outreach",
+      "params": {
+        "sourceStepId": "linkedin_research_gaming",
+        "messageTemplate": "gaming_partnership",
+        "tone": "professional_friendly",
+        "companyName": "Gaming Startup Co",
+        "maxMessages": 20
+      }
+    },
+    {
+      "id": "outreach_report",
+      "kind": "REPORT",
+      "title": "Generate outreach CSV",
+      "params": {
+        "sourceStepIds": ["query_gaming_influencers", "linkedin_research_gaming", "generate_outreach_messages"],
+        "columns": ["current_username", "linkedin_summary", "outreach_message"],
+        "filename": "gaming_outreach_campaign.csv",
+        "format": "CSV"
+      }
+    }
+  ],
+  "notes": "Focus on gaming partnerships with personalized LinkedIn-based outreach"
+}
+`.trim()
+
 /* ---------------------------------- *
  * Intent Hints (for the model)
  * ---------------------------------- */
@@ -208,6 +290,7 @@ Recognized intent labels (examples):
   - top_profiles_by_campaign
   - profiles_with_tag
   - high_engagement_recent
+  - profile_by_username (requires username parameter)
 The model SHOULD choose the closest sensible label, not invent arbitrary long phrases.
 `.trim()
 
@@ -218,12 +301,21 @@ export function buildPlannerSystemPrompt(): string {
   return [
     'You are a planning assistant that outputs ONLY valid JSON for a multi-step data plan.',
     'Follow the exact schema. Do not wrap JSON in markdown. No extra commentary.',
-    'Each step kind must be one of: QUERY_DATA | ENRICH_PROFILE | REPORT.',
+    'Each step kind must be one of: QUERY_DATA | ENRICH_PROFILE | LINKEDIN_RESEARCH | GENERATE_OUTREACH | REPORT.',
     'Use minimal required steps to accomplish the user objective.',
     'If enrichment is not needed, omit ENRICH_PROFILE.',
-    'Column choices in REPORT should reference fields likely available (e.g., current_username, followers, raw_text).',
+    'If LinkedIn research is mentioned, use LINKEDIN_RESEARCH after QUERY_DATA.',
+    'If outreach/messages are needed, use GENERATE_OUTREACH after LINKEDIN_RESEARCH.',
+    'Column choices in REPORT should reference fields likely available (e.g., current_username, followers, raw_text, linkedin_summary, outreach_message).',
     'Always include "planId" (short snake_case or alphanumeric), "objective" (concise), and "steps".',
     'Add optional "notes" only if clarifying constraints or assumptions.',
+    '',
+    'Step Types:',
+    '- QUERY_DATA: Query local database for profiles',
+    '- ENRICH_PROFILE: Get general profile enrichment data',
+    '- LINKEDIN_RESEARCH: Get LinkedIn-specific summaries with tags',
+    '- GENERATE_OUTREACH: Create personalized outreach messages using LLM',
+    '- REPORT: Generate CSV/spreadsheet from previous step outputs',
     '',
     'JSON Schema (informal):',
     PLAN_JSON_SCHEMA_SNIPPET,
@@ -247,6 +339,10 @@ export function buildPlannerSystemPrompt(): string {
     FEW_SHOT_3_USER,
     'PLAN EXAMPLE 3:',
     FEW_SHOT_3_PLAN,
+    'USER EXAMPLE 4:',
+    FEW_SHOT_4_USER,
+    'PLAN EXAMPLE 4:',
+    FEW_SHOT_4_PLAN,
   ].join('\n')
 }
 

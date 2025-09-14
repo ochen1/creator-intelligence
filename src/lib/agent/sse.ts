@@ -133,7 +133,13 @@ export function createSSEStream(options: SSEOptions = {}): SSEController {
       heartbeatTimer = null
     }
     writeComment('stream closing')
-    void writer.close()
+    // Use a more defensive approach to closing the writer
+    try {
+      void writer.close()
+    } catch (err) {
+      // Stream may already be closed - ignore error
+      console.debug('[SSE] Writer already closed:', err)
+    }
   }
 
   // Initial preamble

@@ -42,6 +42,8 @@ import {
 } from './store'
 import { runDataQueryAgent } from './tools/queryLocalDatabase'
 import { runProfileEnrichmentAgent } from './tools/enrichProfile'
+import { runLinkedInResearchAgent } from './tools/linkedinResearch'
+import { runGenerateOutreachAgent } from './tools/generateOutreach'
 import { runReportingAgent } from './tools/generateSpreadsheet'
 
 /* ---------------------------------- *
@@ -236,6 +238,120 @@ async function executeEnrichProfile(step: ValidatedStep, ctx: StepExecutionConte
   }
 }
 
+async function executeLinkedInResearch(step: ValidatedStep, ctx: StepExecutionContext, planId: string) {
+  const params = step.params as any
+  const sourceStepId: string = params.sourceStepId
+  const usernameField: string = params.usernameField || 'current_username'
+  const tags: string | string[] | undefined = params.tags
+  const maxProfiles: number | undefined = params.maxProfiles
+
+  console.log(`[DEBUG] LinkedIn research step "${step.id}" extracting usernames from source step "${sourceStepId}"`)
+  const usernames = extractUsernamesFromSource(step, ctx.plan, sourceStepId, usernameField)
+  console.log(`[DEBUG] Extracted ${usernames.length} usernames:`, usernames)
+  
+  if (usernames.length === 0) {
+    console.log(`[DEBUG] No usernames found in source step "${sourceStepId}" - this may indicate a data flow issue`)
+  }
+  const start = Date.now()
+  const result = await runLinkedInResearchAgent({
+    stepId: step.id,
+    usernames,
+    tags,
+    maxProfiles,
+  })
+  const duration = Date.now() - start
+  const snippetLimit = ctx.options.enrichmentSnippetLimit ?? 15
+  const snippet = result.summaries.slice(0, snippetLimit).map(s => ({
+    username: s.username,
+    tags: s.tags,
+    summary_preview: s.summary.slice(0, 100),
+  }))
+  const summary = `summaries=${result.summaries.length} failed=${result.errors.length} durationMs=${duration}`
+  return {
+    full: result,
+    snippet,
+    summary,
+    artifacts: [] as string[],
+  }
+}
+
+async function executeGenerateOutreach(step: ValidatedStep, ctx: StepExecutionContext, planId: string) {
+  const params = step.params as any
+  const sourceStepId: string = params.sourceStepId
+  const messageTemplate: string = params.messageTemplate || 'generic_professional'
+  const tone: string = params.tone || 'professional'
+  const companyName: string | undefined = params.companyName
+  const senderName: string | undefined = params.senderName
+  const customPrompt: string | undefined = params.customPrompt
+  const maxMessages: number | undefined = params.maxMessages
+
+  // Extract LinkedIn summaries from source step and try to find enrichment data
+  let summaries: any[] = []
+  let enrichmentData: Record<string, any> = {}
+  
+  updatePlan(planId, draft => {
+    const sourceOutput = draft.stepOutputs[sourceStepId]
+    console.log(`[DEBUG] Source output for step "${sourceStepId}":`, sourceOutput)
+    if (sourceOutput?.summaries && Array.isArray(sourceOutput.summaries)) {
+      summaries = sourceOutput.summaries
+    }
+    
+    // Look for enrichment data from all previous steps
+    for (const [stepId, output] of Object.entries(draft.stepOutputs)) {
+      if (output?.enriched && Array.isArray(output.enriched)) {
+        for (const enriched of output.enriched) {
+          if (enriched?.username) {
+            enrichmentData[enriched.username] = enriched
+          }
+        }
+      }
+    }
+  })
+
+  console.log(`[DEBUG] Found ${summaries.length} LinkedIn summaries for outreach generation`)
+  console.log(`[DEBUG] Found enrichment data for ${Object.keys(enrichmentData).length} profiles`)
+  
+  if (summaries.length === 0) {
+    throw new Error(`No LinkedIn summaries found in source step "${sourceStepId}" for outreach generation`)
+  }
+  
+  // Enhance summaries with enrichment data
+  const enhancedSummaries = summaries.map(summary => {
+    const enriched = enrichmentData[summary.username]
+    return {
+      ...summary,
+      enrichment: enriched || null
+    }
+  })
+
+  const start = Date.now()
+  const result = await runGenerateOutreachAgent({
+    stepId: step.id,
+    summaries: enhancedSummaries,
+    messageTemplate,
+    tone,
+    companyName,
+    senderName,
+    customPrompt,
+    maxMessages,
+  })
+  const duration = Date.now() - start
+  const snippetLimit = 10
+  const snippet = result.messages.slice(0, snippetLimit).map(m => ({
+    username: m.username,
+    template: m.template,
+    tone: m.tone,
+    message_preview: m.outreach_message.slice(0, 80),
+  }))
+  const summary = `messages=${result.messages.length} failed=${result.errors.length} template=${messageTemplate} durationMs=${duration}`
+  return {
+    full: result,
+    snippet,
+    summary,
+    artifacts: [] as string[],
+  }
+}
+
 async function executeReport(step: ValidatedStep, ctx: StepExecutionContext, planId: string) {
   const params = step.params as any
   const sourceStepIds: string[] = params.sourceStepIds
@@ -256,6 +372,24 @@ async function executeReport(step: ValidatedStep, ctx: StepExecutionContext, pla
           current_username: e.username,
           raw_text: e.raw_text,
           fetched_at: e.fetched_at,
+        })))
+      } else if (Array.isArray(out.summaries)) {
+        // LinkedIn research output
+        combined.push(...out.summaries.map((s: any) => ({
+          current_username: s.username,
+          linkedin_tags: s.tags,
+          linkedin_summary: s.summary,
+          fetched_at: s.fetched_at,
+        })))
+      } else if (Array.isArray(out.messages)) {
+        // Outreach generation output
+        combined.push(...out.messages.map((m: any) => ({
+          current_username: m.username,
+          linkedin_summary: m.linkedin_summary,
+          outreach_message: m.outreach_message,
+          message_template: m.template,
+          message_tone: m.tone,
+          generated_at: m.generated_at,
         })))
       }
     }
@@ -321,6 +455,8 @@ export async function runPlanExecution(planId: string, options: OrchestratorRunO
       let execResult:
         | Awaited<ReturnType<typeof executeQueryData>>
         | Awaited<ReturnType<typeof executeEnrichProfile>>
+        | Awaited<ReturnType<typeof executeLinkedInResearch>>
+        | Awaited<ReturnType<typeof executeGenerateOutreach>>
         | Awaited<ReturnType<typeof executeReport>>
 
       const ctx: StepExecutionContext = {
@@ -334,6 +470,12 @@ export async function runPlanExecution(planId: string, options: OrchestratorRunO
           break
         case StepKind.ENRICH_PROFILE:
           execResult = await executeEnrichProfile(step, ctx, planId)
+          break
+        case StepKind.LINKEDIN_RESEARCH:
+          execResult = await executeLinkedInResearch(step, ctx, planId)
+          break
+        case StepKind.GENERATE_OUTREACH:
+          execResult = await executeGenerateOutreach(step, ctx, planId)
           break
         case StepKind.REPORT:
           execResult = await executeReport(step, ctx, planId)

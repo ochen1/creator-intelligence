@@ -54,7 +54,7 @@ interface ClassifierResponse {
   [k: string]: any
 }
 
-const CLASSIFIER_BASE = 'http://localhost:13732'
+const CLASSIFIER_BASE = 'https://7005d0347fac.ngrok-free.app/get-user-info'
 
 export function ProfileIdentification() {
   // Query controls
@@ -152,8 +152,10 @@ export function ProfileIdentification() {
 
       try {
         // 1. Call classifier
-        const res = await fetch(`${CLASSIFIER_BASE}/profile-instagram-user/${encodeURIComponent(p.current_username)}`, {
-          method: 'GET',
+        const res = await fetch(`${CLASSIFIER_BASE}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: p.current_username }),
         })
 
         if (!res.ok) {
