@@ -54,7 +54,7 @@ interface ClassifierResponse {
   [k: string]: any
 }
 
-const CLASSIFIER_BASE = 'https://7005d0347fac.ngrok-free.app'
+const CLASSIFIER_BASE = 'http://localhost:40209'
 
 export function ProfileIdentification() {
   // Query controls

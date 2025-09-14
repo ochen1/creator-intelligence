@@ -65,7 +65,7 @@ export const PLAN_JSON_SCHEMA_SNIPPET = `
       "title": "Generate personalized outreach",
       "params": {
         "sourceStepId": "linkedin_step",
-        "messageTemplate": "gaming_partnership",
+        "purpose": "gaming_partnership",
         "tone": "professional",
         "companyName": "Our Company",
         "maxMessages": 25
@@ -258,7 +258,7 @@ const FEW_SHOT_4_PLAN = `
       "title": "Create personalized outreach",
       "params": {
         "sourceStepId": "linkedin_research_gaming",
-        "messageTemplate": "gaming_partnership",
+        "purpose": "gaming_partnership",
         "tone": "professional_friendly",
         "companyName": "Gaming Startup Co",
         "maxMessages": 20

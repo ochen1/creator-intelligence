@@ -4,11 +4,11 @@
  * PURPOSE:
  *   Generate personalized cold outreach messages using LinkedIn summaries and LLM.
  *   Uses the existing LLM infrastructure to create contextual, personalized messages
- *   based on LinkedIn profile summaries and configurable templates/tones.
+ *   based on LinkedIn profile summaries with dynamic message generation.
  *
  * SPEC DECISIONS (Phase 2):
  *   - Uses existing LLM client from src/lib/llm.ts
- *   - Configurable message templates and tones
+ *   - Dynamic message generation (no templates)
  *   - Batch processing with error handling
  *   - No message storage (ephemeral for reporting only)
  *
@@ -16,7 +16,7 @@
  *   {
  *     stepId: string
  *     summaries: LinkedInSummaryResult[]  // from LinkedIn research step
- *     messageTemplate?: string            // template type (gaming_partnership, tech_collaboration, etc.)
+ *     purpose: string                     // outreach purpose (gaming_partnership, tech_collaboration, etc.)
  *     tone?: string                       // professional, casual, friendly, etc.
  *     companyName?: string               // sender's company
  *     senderName?: string                // sender's name
@@ -27,14 +27,14 @@
  * OUTPUT (agent):
  *   {
  *     stepId: string
- *     messages: { username, summary, outreach_message, template, tone }[]
+ *     messages: { username, summary, outreach_message, purpose, tone }[]
  *     errors: { username: string, code: string, message: string }[]
  *     meta: {
  *       requested: number
  *       attempted: number
  *       succeeded: number
  *       failed: number
- *       template: string
+ *       purpose: string
  *       tone: string
  *       durationMs: number
  *     }
@@ -64,93 +64,18 @@ export class OutreachToolError extends Error {
 }
 
 /* ---------------------------------- *
- * Message Templates & Prompts
+ * Dynamic Message Generation
  * ---------------------------------- */
 
-interface MessageTemplate {
-  name: string
-  description: string
-  systemPrompt: string
-  userPromptTemplate: string
-}
-
-const MESSAGE_TEMPLATES: Record<string, MessageTemplate> = {
-  gaming_partnership: {
-    name: 'Gaming Partnership',
-    description: 'Professional outreach for gaming industry partnerships',
-    systemPrompt: `You are a professional outreach specialist writing personalized LinkedIn connection requests for gaming industry partnerships. Your messages should be:
-- Professional but friendly
-- Specific to the person's background
-- Focused on mutual value and collaboration
-- Brief (under 150 words)
-- Include a clear call-to-action`,
-    userPromptTemplate: `Write a personalized LinkedIn connection request to {{displayName}} (username: {{username}}) based on their profile summary.
-    
-Profile Summary: {{summary}}
-Company: {{companyName}}
-Sender: {{senderName}}
-Tone: {{tone}}
-
-Focus on gaming industry partnerships and collaboration opportunities. Be specific about their background and suggest concrete ways to work together. Use their real name "{{realName}}" in the message if available, not their username.`
-  },
-  
-  tech_collaboration: {
-    name: 'Tech Collaboration',
-    description: 'Professional outreach for technology collaborations',
-    systemPrompt: `You are a professional outreach specialist writing personalized LinkedIn connection requests for technology collaborations. Your messages should be:
-- Professional and technical
-- Highlight relevant technical expertise
-- Suggest specific collaboration opportunities
-- Brief (under 150 words)
-- Include a clear next step`,
-    userPromptTemplate: `Write a personalized LinkedIn connection request to {{displayName}} (username: {{username}}) based on their profile summary.
-
-Profile Summary: {{summary}}
-Company: {{companyName}}
-Sender: {{senderName}}
-Tone: {{tone}}
-
-Focus on technology collaboration opportunities. Reference their technical background and suggest specific ways to collaborate. Use their real name "{{realName}}" in the message if available, not their username.`
-  },
-  
-  content_creator: {
-    name: 'Content Creator',
-    description: 'Outreach for content creators and influencers',
-    systemPrompt: `You are a professional outreach specialist writing personalized LinkedIn connection requests for content creator partnerships. Your messages should be:
-- Enthusiastic but professional
-- Reference their content style/niche
-- Suggest partnership opportunities
-- Brief (under 150 words)
-- Show genuine interest in their work`,
-    userPromptTemplate: `Write a personalized LinkedIn connection request to {{displayName}} (username: {{username}}) based on their profile summary.
-
-Profile Summary: {{summary}}
-Company: {{companyName}}
-Sender: {{senderName}}
-Tone: {{tone}}
-
-Focus on content creation partnerships. Reference their content style and suggest collaboration opportunities. Use their real name "{{realName}}" in the message if available, not their username.`
-  },
-  
-  generic_professional: {
-    name: 'Generic Professional',
-    description: 'General professional networking outreach',
-    systemPrompt: `You are a professional outreach specialist writing personalized LinkedIn connection requests. Your messages should be:
+// Simplified system prompt for dynamic message generation
+const DEFAULT_SYSTEM_PROMPT = `You are a professional outreach specialist writing personalized LinkedIn connection requests. Your messages should be:
 - Professional and respectful
-- Personalized to their background
-- Suggest mutual networking value
+- Highly personalized based on the person's background and interests
+- Suggest mutual value or collaboration opportunities
 - Brief (under 150 words)
-- Include a clear reason for connecting`,
-    userPromptTemplate: `Write a personalized LinkedIn connection request to {{displayName}} (username: {{username}}) based on their profile summary.
-
-Profile Summary: {{summary}}
-Company: {{companyName}}
-Sender: {{senderName}}
-Tone: {{tone}}
-
-Focus on professional networking and mutual value. Be specific about their background and suggest reasons to connect. Use their real name "{{realName}}" in the message if available, not their username.`
-  }
-}
+- Include a clear reason for connecting
+- Use their real name when available, not their username
+- Be genuine and avoid generic language`
 
 const TONE_MODIFIERS: Record<string, string> = {
   professional: 'Keep the tone strictly professional and formal',
@@ -170,22 +95,22 @@ export interface EnhancedLinkedInSummary extends LinkedInSummaryResult {
 
 export interface GenerateOutreachToolParams {
   summaries: EnhancedLinkedInSummary[]
-  messageTemplate?: string
   tone?: string
   companyName?: string
   senderName?: string
   customPrompt?: string
   maxMessages?: number
+  purpose?: string  // Optional purpose/context for the outreach
 }
 
 export interface OutreachMessage {
   username: string
   linkedin_summary: string
   outreach_message: string
-  template: string
   tone: string
   generated_at: number
   real_name?: string
+  purpose?: string
 }
 
 export interface GenerateOutreachToolResult {
@@ -200,9 +125,9 @@ export interface GenerateOutreachToolResult {
     attempted: number
     succeeded: number
     failed: number
-    template: string
     tone: string
     durationMs: number
+    purpose?: string
   }
 }
 
@@ -268,19 +193,14 @@ export async function generateOutreachTool(params: GenerateOutreachToolParams): 
     throw new OutreachToolError('NO_SUMMARIES', 'No LinkedIn summaries provided')
   }
 
-  const template = params.messageTemplate || 'generic_professional'
   const tone = params.tone || 'professional'
   const companyName = params.companyName || 'Our Company'
   const senderName = params.senderName || 'Our Team'
+  const purpose = params.purpose || 'professional networking and collaboration'
   
   let working: EnhancedLinkedInSummary[] = params.summaries
   if (typeof params.maxMessages === 'number' && params.maxMessages > 0 && working.length > params.maxMessages) {
     working = working.slice(0, params.maxMessages)
-  }
-
-  const messageTemplate = MESSAGE_TEMPLATES[template]
-  if (!messageTemplate) {
-    throw new OutreachToolError('INVALID_PARAM', `Unknown message template: ${template}`)
   }
 
   const toneModifier = TONE_MODIFIERS[tone] || TONE_MODIFIERS.professional
@@ -291,13 +211,16 @@ export async function generateOutreachTool(params: GenerateOutreachToolParams): 
 
   for (const summary of working) {
     try {
-      // Extract real name if available from enrichment data
-      const realName = summary.enrichment ? extractRealName(summary.enrichment) : null
+      // Prefer real name coming directly from LinkedIn research (summary.real_name)
+      // Fallback to enrichment-based heuristic extraction if not present
+      const realName = summary.real_name
+        ? summary.real_name
+        : (summary.enrichment ? extractRealName(summary.enrichment) : null)
       const displayName = realName || summary.username
       
       console.log(`[DEBUG] Processing ${summary.username}: realName="${realName}", displayName="${displayName}"`)
       
-      let systemPrompt = messageTemplate.systemPrompt
+      let systemPrompt: string
       let userPrompt: string
 
       if (params.customPrompt) {
@@ -309,28 +232,31 @@ export async function generateOutreachTool(params: GenerateOutreachToolParams): 
           summary: summary.summary,
           companyName,
           senderName,
-          tone
+          tone,
+          purpose
         })
       } else {
-        systemPrompt += `\n\nAdditional tone guidance: ${toneModifier}`
+        systemPrompt = DEFAULT_SYSTEM_PROMPT + `\n\nTone guidance: ${toneModifier}`
         
         // If we have a real name, mention using it in the system prompt
         if (realName) {
           systemPrompt += `\n\nIMPORTANT: The person's real name is "${realName}" - use this in your message instead of their username "${summary.username}".`
         }
         
-        userPrompt = renderTemplate(messageTemplate.userPromptTemplate, {
-          username: summary.username,
-          realName: realName || summary.username,
-          displayName,
-          summary: summary.summary,
-          companyName,
-          senderName,
-          tone
-        })
+        userPrompt = `Write a personalized LinkedIn connection request to ${displayName} based on their LinkedIn profile summary.
+
+Profile Summary: ${summary.summary}
+Their real name: ${realName || 'Unknown'}
+Their username: ${summary.username}
+Your company: ${companyName}
+Your name: ${senderName}
+Outreach purpose: ${purpose}
+Desired tone: ${tone}
+
+Write a compelling, personalized message that references specific details from their background and explains why you want to connect. Be genuine and suggest concrete value or collaboration opportunities.`
       }
 
-      debugLog('generating_message', { username: summary.username, realName, template, tone })
+      debugLog('generating_message', { username: summary.username, realName, purpose, tone })
 
       const result = await chatCompletion([
         { role: 'system', content: systemPrompt },
@@ -346,10 +272,10 @@ export async function generateOutreachTool(params: GenerateOutreachToolParams): 
         username: summary.username,
         linkedin_summary: summary.summary,
         outreach_message: result.text.trim(),
-        template,
         tone,
         generated_at: Date.now(),
-        real_name: realName || undefined
+        real_name: realName || undefined,
+        purpose
       }
 
       messages.push(outreachMessage)
@@ -380,9 +306,9 @@ export async function generateOutreachTool(params: GenerateOutreachToolParams): 
       attempted: working.length,
       succeeded: messages.length,
       failed: errors.length,
-      template,
       tone,
-      durationMs: end - start
+      durationMs: end - start,
+      purpose
     }
   }
 }
@@ -401,7 +327,7 @@ export interface GenerateOutreachAgentOutput extends GenerateOutreachToolResult 
 
 export async function runGenerateOutreachAgent(input: GenerateOutreachAgentInput): Promise<GenerateOutreachAgentOutput> {
   const { stepId, ...toolParams } = input
-  debugLog('start', { stepId, summaries: toolParams.summaries.length, template: toolParams.messageTemplate })
+  debugLog('start', { stepId, summaries: toolParams.summaries.length, purpose: toolParams.purpose })
   const result = await generateOutreachTool(toolParams)
   debugLog('done', { stepId, succeeded: result.messages.length, failed: result.errors.length })
   return {
@@ -411,17 +337,9 @@ export async function runGenerateOutreachAgent(input: GenerateOutreachAgentInput
 }
 
 /* ---------------------------------- *
- * Template Management
+ * Tone Management
  * ---------------------------------- */
-
-export function getAvailableTemplates(): string[] {
-  return Object.keys(MESSAGE_TEMPLATES)
-}
 
 export function getAvailableTones(): string[] {
   return Object.keys(TONE_MODIFIERS)
-}
-
-export function getTemplateInfo(templateName: string): MessageTemplate | undefined {
-  return MESSAGE_TEMPLATES[templateName]
 }

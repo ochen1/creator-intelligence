@@ -107,8 +107,8 @@ export const LinkedInResearchParamsSchema = z.object({
 export const GenerateOutreachParamsSchema = z.object({
   sourceStepId: z.string()
     .describe('ID of a previous LINKEDIN_RESEARCH step supplying summaries'),
-  messageTemplate: z.string().default('generic_professional')
-    .describe('Message template type (gaming_partnership, tech_collaboration, etc.)'),
+  purpose: z.string()
+    .describe('Purpose of the outreach (collaboration, partnership, hiring, etc.)'),
   tone: z.string().default('professional')
     .describe('Message tone (professional, casual, friendly, etc.)'),
   companyName: z.string().optional()
@@ -116,7 +116,7 @@ export const GenerateOutreachParamsSchema = z.object({
   senderName: z.string().optional()
     .describe('Sender name for personalization'),
   customPrompt: z.string().optional()
-    .describe('Custom LLM prompt to override default template'),
+    .describe('Custom LLM prompt for specific messaging requirements'),
   maxMessages: z.number().int().positive().max(200).optional()
     .describe('Optional cap on number of messages to generate'),
 })

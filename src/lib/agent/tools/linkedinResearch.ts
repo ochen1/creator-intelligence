@@ -115,14 +115,26 @@ export async function linkedinResearchTool(params: LinkedInResearchToolParams): 
     truncated = true
   }
 
+  // Normalize usernames for Instagram-based real name extraction:
+  //  - strip leading '@'
+  //  - remove surrounding whitespace (already trimmed above)
+  //  - de-duplicate again after normalization
+  const cleaned = Array.from(
+    new Set(
+      working
+        .map(u => u.replace(/^@/, ''))
+        .filter(Boolean),
+    ),
+  )
+
   const normalizedTags = normalizeTags(params.tags)
   const start = Date.now()
   const summaries: LinkedInSummaryResult[] = []
   const errors: { username: string; code: string; message: string }[] = []
 
-  for (const username of working) {
+  for (const rawUsername of cleaned) {
     try {
-      const res = await fetchLinkedInSummary(username, normalizedTags, {
+      const res = await fetchLinkedInSummary(rawUsername, normalizedTags, {
         baseUrl: params.baseUrl,
         timeoutMs: params.timeoutMs,
       })
@@ -130,13 +142,13 @@ export async function linkedinResearchTool(params: LinkedInResearchToolParams): 
     } catch (err: any) {
       if (err instanceof LinkedInError) {
         errors.push({
-          username,
+          username: rawUsername,
           code: err.code,
           message: err.message,
         })
       } else {
         errors.push({
-          username,
+          username: rawUsername,
           code: 'UNKNOWN',
           message: (err as Error)?.message || 'Unknown error',
         })
@@ -150,7 +162,7 @@ export async function linkedinResearchTool(params: LinkedInResearchToolParams): 
     errors,
     meta: {
       requested: unique.length,
-      attempted: working.length,
+      attempted: cleaned.length,
       succeeded: summaries.length,
       failed: errors.length,
       truncated,

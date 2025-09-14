@@ -278,12 +278,12 @@ async function executeLinkedInResearch(step: ValidatedStep, ctx: StepExecutionCo
 async function executeGenerateOutreach(step: ValidatedStep, ctx: StepExecutionContext, planId: string) {
   const params = step.params as any
   const sourceStepId: string = params.sourceStepId
-  const messageTemplate: string = params.messageTemplate || 'generic_professional'
   const tone: string = params.tone || 'professional'
   const companyName: string | undefined = params.companyName
   const senderName: string | undefined = params.senderName
   const customPrompt: string | undefined = params.customPrompt
   const maxMessages: number | undefined = params.maxMessages
+  const purpose: string | undefined = params.purpose
 
   // Extract LinkedIn summaries from source step and try to find enrichment data
   let summaries: any[] = []
@@ -328,22 +328,22 @@ async function executeGenerateOutreach(step: ValidatedStep, ctx: StepExecutionCo
   const result = await runGenerateOutreachAgent({
     stepId: step.id,
     summaries: enhancedSummaries,
-    messageTemplate,
     tone,
     companyName,
     senderName,
     customPrompt,
     maxMessages,
+    purpose,
   })
   const duration = Date.now() - start
   const snippetLimit = 10
   const snippet = result.messages.slice(0, snippetLimit).map(m => ({
     username: m.username,
-    template: m.template,
     tone: m.tone,
+    purpose: m.purpose,
     message_preview: m.outreach_message.slice(0, 80),
   }))
-  const summary = `messages=${result.messages.length} failed=${result.errors.length} template=${messageTemplate} durationMs=${duration}`
+  const summary = `messages=${result.messages.length} failed=${result.errors.length} tone=${tone} purpose=${purpose || 'networking'} durationMs=${duration}`
   return {
     full: result,
     snippet,
@@ -385,10 +385,11 @@ async function executeReport(step: ValidatedStep, ctx: StepExecutionContext, pla
         // Outreach generation output
         combined.push(...out.messages.map((m: any) => ({
           current_username: m.username,
+          real_name: m.real_name,
           linkedin_summary: m.linkedin_summary,
           outreach_message: m.outreach_message,
-          message_template: m.template,
           message_tone: m.tone,
+          message_purpose: m.purpose,
           generated_at: m.generated_at,
         })))
       }
