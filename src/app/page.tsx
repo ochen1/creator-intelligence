@@ -73,9 +73,6 @@ export default function HomePage() {
 
       {/* Data Ingestion */}
       <DataIngestion />
-
-      {/* Profile Identification */}
-      <ProfileIdentification />
       
       {/* AI Content Suggestions */}
       <AIContentSuggestions />
