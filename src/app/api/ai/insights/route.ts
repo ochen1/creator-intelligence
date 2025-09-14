@@ -60,26 +60,40 @@ TOTAL FOLLOWERS: ${totalFollowers}
 TOTAL CHURNS: ${totalChurns}
 NET GROWTH: ${netGrowth}
 
-As an AI marketer, provide:
+Based on the follower and churn tag data provided above, analyze the percentages and generate:
 
-1. AUDIENCE INSIGHTS (3-4 key findings about your follower demographics and behavior patterns)
-2. CHURNER ANALYSIS (2-3 specific reasons why people might be leaving and how to address them)
-3. FOLLOWER RETENTION STRATEGIES (3-4 actionable tactics to keep current followers engaged)
-4. CONTENT OPTIMIZATION (3-4 specific content recommendations based on your audience tags)
-5. CAMPAIGN IMPROVEMENTS (3-4 strategic changes to improve this campaign's performance)
+1. KEY METRICS: Extract the top 5 most significant percentage statistics from the follower tags data. Use the actual percentages from the data provided.
+2. GENERALIZATIONS: Create 3-4 high-level insights about your follower base based on the tag patterns you observe.
+3. AUDIENCE INSIGHTS: 3-4 key findings about your follower demographics and behavior patterns.
+4. CHURNER ANALYSIS: 2-3 specific reasons why people might be leaving based on churn tag patterns.
+5. FOLLOWER RETENTION STRATEGIES: 3-4 actionable tactics to keep current followers engaged.
+6. CONTENT OPTIMIZATION: 3-4 specific content recommendations based on your audience tags.
+7. CAMPAIGN IMPROVEMENTS: 3-4 strategic changes to improve this campaign's performance.
 
-IMPORTANT: You MUST respond with ONLY valid JSON. Do not include any text before or after the JSON. The response should start with { and end with }.
+CRITICAL: You MUST respond with ONLY valid JSON. Do not include any text before or after the JSON. The response should start with { and end with }.
 
 {
-  "insights": ["audience insight 1", "audience insight 2", "audience insight 3"],
-  "churnerAnalysis": ["churn reason 1", "churn reason 2"],
-  "retentionStrategies": ["retention tactic 1", "retention tactic 2", "retention tactic 3"],
-  "contentRecommendations": ["content idea 1", "content idea 2", "content idea 3"],
-  "campaignImprovements": ["improvement 1", "improvement 2", "improvement 3"],
-  "confidence": 85
+  "keyMetrics": [
+    {"percentage": [ACTUAL_PERCENTAGE_FROM_FOLLOWER_TAGS], "description": "[DESCRIPTION_BASED_ON_TAG]"},
+    {"percentage": [ACTUAL_PERCENTAGE_FROM_FOLLOWER_TAGS], "description": "[DESCRIPTION_BASED_ON_TAG]"},
+    {"percentage": [ACTUAL_PERCENTAGE_FROM_FOLLOWER_TAGS], "description": "[DESCRIPTION_BASED_ON_TAG]"},
+    {"percentage": [ACTUAL_PERCENTAGE_FROM_FOLLOWER_TAGS], "description": "[DESCRIPTION_BASED_ON_TAG]"},
+    {"percentage": [ACTUAL_PERCENTAGE_FROM_FOLLOWER_TAGS], "description": "[DESCRIPTION_BASED_ON_TAG]"}
+  ],
+  "generalizations": [
+    "[GENERALIZATION_1_BASED_ON_TAG_PATTERNS]",
+    "[GENERALIZATION_2_BASED_ON_TAG_PATTERNS]",
+    "[GENERALIZATION_3_BASED_ON_TAG_PATTERNS]"
+  ],
+  "insights": ["[INSIGHT_1]", "[INSIGHT_2]", "[INSIGHT_3]"],
+  "churnerAnalysis": ["[CHURN_REASON_1]", "[CHURN_REASON_2]"],
+  "retentionStrategies": ["[STRATEGY_1]", "[STRATEGY_2]", "[STRATEGY_3]"],
+  "contentRecommendations": ["[RECOMMENDATION_1]", "[RECOMMENDATION_2]", "[RECOMMENDATION_3]"],
+  "campaignImprovements": ["[IMPROVEMENT_1]", "[IMPROVEMENT_2]", "[IMPROVEMENT_3]"],
+  "confidence": [CONFIDENCE_SCORE_0_100]
 }
 
-Be specific, data-driven, and focus on actionable next steps for the creator.`
+Use the actual tag data and percentages provided above. Be specific, data-driven, and focus on actionable next steps for the creator.`
 
   console.log('Making API call with prompt:', prompt)
   console.log('Analytics data being processed:', JSON.stringify(analytics, null, 2))
@@ -170,40 +184,24 @@ Be specific, data-driven, and focus on actionable next steps for the creator.`
       console.log('Parse error:', parseError)
       console.log('Raw content that failed to parse:', jsonContent)
       
-      // Fallback: return mock data if JSON parsing fails
-      console.log('Using fallback mock data due to JSON parse error')
+      // Fallback: return empty data if JSON parsing fails
+      console.log('Using empty fallback data due to JSON parse error')
       aiResponse = {
-        insights: [
-          "Your audience is heavily concentrated in the teen demographic (100%)",
-          "Secondary audience segment shows strong UAB and skiing interests (67% each)",
-          "Male audience represents 60% of your followers",
-          "Food content has minimal engagement (7%)"
-        ],
-        churnerAnalysis: [
-          "Low engagement content may be causing followers to become inactive",
-          "Content mismatch with audience interests could lead to churn"
-        ],
-        retentionStrategies: [
-          "Create more teen-focused content that aligns with UAB and skiing interests",
-          "Increase male-targeted content to maintain the 60% male audience",
-          "Reduce food-related content and focus on high-performing topics"
-        ],
-        contentRecommendations: [
-          "Develop skiing and UAB-related content for your teen audience",
-          "Create interactive content that appeals to male teens",
-          "Focus on lifestyle and activity-based content over food"
-        ],
-        campaignImprovements: [
-          "Adjust content calendar to prioritize teen interests",
-          "Implement audience feedback loops to reduce churn",
-          "A/B test different content formats for better engagement"
-        ],
-        confidence: 75
+        keyMetrics: [],
+        generalizations: [],
+        insights: [],
+        churnerAnalysis: [],
+        retentionStrategies: [],
+        contentRecommendations: [],
+        campaignImprovements: [],
+        confidence: 0
       }
     }
     
     console.log('=== RETURNING AI RESPONSE ===')
     const finalResponse = {
+      keyMetrics: aiResponse.keyMetrics || [],
+      generalizations: aiResponse.generalizations || [],
       insights: aiResponse.insights || [],
       churnerAnalysis: aiResponse.churnerAnalysis || [],
       retentionStrategies: aiResponse.retentionStrategies || [],

@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useCampaigns, useCampaignMutations } from '@/lib/hooks'
 import { formatDate } from '@/lib/dates'
 import { PlusCircle, Trash2, ChevronDown, ChevronRight, Users, TrendingUp, Lightbulb } from 'lucide-react'
+import { EnhancedCampaignAnalytics } from './EnhancedCampaignAnalytics'
 
 const CAMPAIGN_TYPES = ['CONTENT', 'OUTBOUND_FOLLOW'] as const
 
@@ -170,169 +171,12 @@ function CampaignCard({ campaign, onDelete }: CampaignCardProps) {
                 <span className="ml-3 text-muted-foreground">Generating insights...</span>
               </div>
             ) : analytics ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Side - Follower and Churn Tags */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-lg">Campaign Analytics</h4>
-                  
-                  {/* Follower Tags */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-green-600 text-sm">
-                        <Users className="h-4 w-4" />
-                        Follower Tags
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {analytics.totalFollowers} total followers
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {analytics.followerTags.slice(0, 5).map((tag: any, index: number) => (
-                          <div key={index} className="flex justify-between items-center">
-                            <span className="text-sm">{tag.tag}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-gray-200 rounded-full h-2">
-                                <div 
-                                  className="bg-green-500 h-2 rounded-full" 
-                                  style={{ width: `${tag.percentage}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-xs text-gray-500 w-8">{tag.percentage}%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Churn Tags */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-red-600 text-sm">
-                        <TrendingUp className="h-4 w-4" />
-                        Churn Tags
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {analytics.totalChurns} total churns
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {analytics.churnTags.slice(0, 5).map((tag: any, index: number) => (
-                          <div key={index} className="flex justify-between items-center">
-                            <span className="text-sm">{tag.tag}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-gray-200 rounded-full h-2">
-                                <div 
-                                  className="bg-red-500 h-2 rounded-full" 
-                                  style={{ width: `${tag.percentage}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-xs text-gray-500 w-8">{tag.percentage}%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Right Side - AI Insights */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-lg">AI Campaign Analysis</h4>
-                  
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-sm">
-                        <Lightbulb className="h-4 w-4" />
-                        Key Insights
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        Based on your audience tags and campaign performance
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {isLoadingAI ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                          <span>Generating AI insights...</span>
-                        </div>
-                      ) : analytics.insights && analytics.insights.length > 0 ? (
-                        <ul className="space-y-2">
-                          {analytics.insights.map((insight: string, index: number) => (
-                            <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
-                              <span className="text-blue-500 mt-1">•</span>
-                              {insight}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500">No AI insights available</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">Improvement Suggestions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {isLoadingAI ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
-                          <span>Generating suggestions...</span>
-                        </div>
-                      ) : analytics.contentRecommendations && analytics.contentRecommendations.length > 0 ? (
-                        <ul className="space-y-2">
-                          {analytics.contentRecommendations.map((suggestion: string, index: number) => (
-                            <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
-                              <span className="text-green-500 mt-1">•</span>
-                              {suggestion}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500">No suggestions available</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">Marketing Strategies</CardTitle>
-                      <CardDescription className="text-xs">
-                        Advanced recommendations for campaign optimization
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {isLoadingAI ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
-                          <span>Generating strategies...</span>
-                        </div>
-                      ) : analytics.campaignImprovements && analytics.campaignImprovements.length > 0 ? (
-                        <ul className="space-y-2">
-                          {analytics.campaignImprovements.map((strategy: string, index: number) => (
-                            <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
-                              <span className="text-purple-500 mt-1">•</span>
-                              {strategy}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500">No marketing strategies available</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {analytics.confidence && (
-                    <div className="text-xs text-gray-500 text-center">
-                      AI Confidence: {analytics.confidence}%
-                    </div>
-                  )}
-                </div>
-              </div>
+              <EnhancedCampaignAnalytics
+                campaignId={campaign.campaign_id}
+                campaignName={campaign.campaign_name}
+                campaignType={campaign.campaign_type}
+                campaignDate={formatDate(typeof campaign.campaign_date === 'string' ? new Date(campaign.campaign_date) : campaign.campaign_date, 'date')}
+              />
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <p>Click to load campaign insights</p>

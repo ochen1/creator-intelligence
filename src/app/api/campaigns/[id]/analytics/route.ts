@@ -42,24 +42,24 @@ export async function GET(
     }
 
     // Separate followers and churns
-    const followers = campaign.attributions.filter(attr => attr.event.event_type === 'FOLLOWED_ME')
-    const churns = campaign.attributions.filter(attr => attr.event.event_type === 'UNFOLLOWED_ME')
+    const followers = campaign.attributions.filter((attr: any) => attr.event.event_type === 'FOLLOWED_ME')
+    const churns = campaign.attributions.filter((attr: any) => attr.event.event_type === 'UNFOLLOWED_ME')
 
     // Extract tags from followers and churns
     const followerTags = new Map<string, number>()
     const churnTags = new Map<string, number>()
 
-    followers.forEach(attr => {
+    followers.forEach((attr: any) => {
       const profile = attr.event.profile
-      profile.tags.forEach(profileTag => {
+      profile.tags.forEach((profileTag: any) => {
         const tagName = profileTag.tag.tag_name
         followerTags.set(tagName, (followerTags.get(tagName) || 0) + 1)
       })
     })
 
-    churns.forEach(attr => {
+    churns.forEach((attr: any) => {
       const profile = attr.event.profile
-      profile.tags.forEach(profileTag => {
+      profile.tags.forEach((profileTag: any) => {
         const tagName = profileTag.tag.tag_name
         churnTags.set(tagName, (churnTags.get(tagName) || 0) + 1)
       })
@@ -81,6 +81,18 @@ export async function GET(
       percentage: totalChurns > 0 ? Math.round((count / totalChurns) * 100) : 0
     })).sort((a, b) => b.percentage - a.percentage)
 
+    // Create follower profiles with their tags
+    const followerProfiles = followers.map((attr: any) => ({
+      username: attr.event.profile.current_username,
+      tags: attr.event.profile.tags.map((profileTag: any) => profileTag.tag.tag_name)
+    }))
+
+    // Create churn profiles with their tags
+    const churnProfiles = churns.map((attr: any) => ({
+      username: attr.event.profile.current_username,
+      tags: attr.event.profile.tags.map((profileTag: any) => profileTag.tag.tag_name)
+    }))
+
     return jsonSuccess({
       campaign: {
         campaign_id: campaign.campaign_id,
@@ -90,6 +102,8 @@ export async function GET(
       },
       followerTags: followerTagStats,
       churnTags: churnTagStats,
+      followerProfiles,
+      churnProfiles,
       totalFollowers,
       totalChurns,
       netGrowth: totalFollowers - totalChurns
