@@ -8,8 +8,11 @@ export async function GET(
   try {
     const { id } = await context.params
     const campaignId = parseInt(id)
+    
+    console.log('Analytics API called with campaign ID:', campaignId)
 
     if (isNaN(campaignId)) {
+      console.log('Invalid campaign ID provided:', id)
       return jsonError('Invalid campaign ID', 400)
     }
 
@@ -38,12 +41,19 @@ export async function GET(
     })
 
     if (!campaign) {
+      console.log('Campaign not found for ID:', campaignId)
       return jsonError('Campaign not found', 404)
     }
+    
+    console.log('Found campaign:', campaign.campaign_name)
+    console.log('Number of attributions:', campaign.attributions.length)
 
     // Separate followers and churns
     const followers = campaign.attributions.filter((attr: any) => attr.event.event_type === 'FOLLOWED_ME')
     const churns = campaign.attributions.filter((attr: any) => attr.event.event_type === 'UNFOLLOWED_ME')
+    
+    console.log('Followers count:', followers.length)
+    console.log('Churns count:', churns.length)
 
     // Extract tags from followers and churns
     const followerTags = new Map<string, number>()
@@ -93,7 +103,7 @@ export async function GET(
       tags: attr.event.profile.tags.map((profileTag: any) => profileTag.tag.tag_name)
     }))
 
-    return jsonSuccess({
+    const result = {
       campaign: {
         campaign_id: campaign.campaign_id,
         campaign_name: campaign.campaign_name,
@@ -107,7 +117,10 @@ export async function GET(
       totalFollowers,
       totalChurns,
       netGrowth: totalFollowers - totalChurns
-    })
+    }
+    
+    console.log('Returning analytics result:', JSON.stringify(result, null, 2))
+    return jsonSuccess(result)
 
   } catch (err: any) {
     console.error('Error fetching campaign analytics:', err)

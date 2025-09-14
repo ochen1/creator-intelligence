@@ -73,8 +73,24 @@ export function EnhancedCampaignAnalytics({
       
       try {
         // Fetch campaign analytics
+        console.log('Fetching analytics for campaign ID:', campaignId)
         const analyticsResponse = await fetch(`/api/campaigns/${campaignId}/analytics`)
-        const analyticsData = await analyticsResponse.json()
+        
+        console.log('Analytics response status:', analyticsResponse.status)
+        console.log('Analytics response headers:', Object.fromEntries(analyticsResponse.headers.entries()))
+        
+        const responseText = await analyticsResponse.text()
+        console.log('Raw response text:', responseText)
+        
+        let analyticsData
+        try {
+          analyticsData = JSON.parse(responseText)
+          console.log('Parsed analytics data:', analyticsData)
+        } catch (parseError) {
+          console.error('Failed to parse JSON response:', parseError)
+          console.log('Response was not valid JSON, likely an HTML error page')
+          throw new Error(`Invalid response format: ${responseText.substring(0, 100)}...`)
+        }
         
         if (!analyticsData.success) {
           throw new Error(analyticsData.error?.message || 'Failed to fetch analytics')
