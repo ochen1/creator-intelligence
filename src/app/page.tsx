@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
+import { AIContentSuggestions } from '@/components/AIContentSuggestions'
 
 export default function HomePage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
@@ -39,6 +40,9 @@ export default function HomePage() {
 
       {/* Profile Identification */}
       <ProfileIdentification />
+      
+      {/* AI Content Suggestions */}
+      <AIContentSuggestions />
       
       <Separator />
 
