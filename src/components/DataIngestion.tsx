@@ -360,39 +360,37 @@ export function DataIngestion() {
   const pendingFiles = files.filter(f => f.status === 'pending')
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Upload className="h-5 w-5" />
+    <Card className="bg-white shadow-sm border-0 rounded-xl">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
           Data Ingestion
         </CardTitle>
-        <CardDescription>
-          Upload your Instagram data export ZIP files to import follower and following data.
-          You can select multiple files or drag and drop them.
+        <CardDescription className="text-gray-600 text-base">
+          Upload your Instagram data export ZIP files to import user data. You can select multiple files or drag and drop them.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Upload Section */}
         <div className="space-y-4">
           <div
-            className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 transition-colors ${
               isDragOver 
-                ? 'border-primary bg-primary/5' 
-                : 'border-muted-foreground/25'
+                ? 'border-blue-400 bg-blue-50' 
+                : 'border-blue-200 bg-blue-50'
             }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <div className="text-center space-y-4">
+            <div className="text-center space-y-6">
               <FileArchive className={`h-12 w-12 mx-auto ${
-                isDragOver ? 'text-primary' : 'text-muted-foreground'
+                isDragOver ? 'text-blue-600' : 'text-blue-600'
               }`} />
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">
+              <div className="space-y-3">
+                <h3 className="text-lg font-medium text-gray-900">
                   {isDragOver ? 'Drop ZIP files here' : 'Upload Instagram Data Exports'}
                 </h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                <p className="text-sm text-gray-600 max-w-md mx-auto">
                   {isDragOver 
                     ? 'Release to add the files to the processing queue'
                     : 'Drag and drop ZIP files here, or click to select multiple files. Each file will be processed individually.'
@@ -402,7 +400,7 @@ export function DataIngestion() {
               <Button
                 onClick={handleFileSelect}
                 disabled={processingFiles.length > 0}
-                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-lg font-medium"
               >
                 <Upload className="h-4 w-4 mr-2" />
                 Select ZIP Files

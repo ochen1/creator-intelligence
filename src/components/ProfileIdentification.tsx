@@ -333,16 +333,16 @@ export function ProfileIdentification() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="bg-white shadow-sm border-0 rounded-xl">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
           <Hash className="h-5 w-5" />
-          Profile Identification Agent Swarm Orchestrator
-          <Badge variant="outline" className="ml-2">
+          Stalking Agent Swarm Orchestrator
+          <Badge variant="outline" className="ml-2 bg-gray-100 text-gray-700 border-gray-300">
             {profiles.length} profiles
           </Badge>
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-gray-600 text-base">
           Automatically infer audience characteristics and apply tags (auto-assigned) using local classifier.
         </CardDescription>
       </CardHeader>

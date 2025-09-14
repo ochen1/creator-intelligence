@@ -197,13 +197,13 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
   }
 
   return (
-    <Card className={cn('w-full', className)}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className={cn('w-full bg-white shadow-sm border-0 rounded-xl', className)}>
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
           <Sparkles className="h-5 w-5" />
           AI Content Suggestions
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-gray-600 text-base">
           Upload your promotional content (PDF or image) to get AI-powered suggestions based on your audience data and campaigns.
         </CardDescription>
       </CardHeader>
@@ -211,12 +211,12 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
         {/* File Upload Section */}
         <div className="space-y-4">
           {uploadedFile ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 {uploadedFile.type.startsWith('image/') ? (
-                  <FileImage className="h-6 w-6 text-green-600" />
+                  <FileImage className="h-6 w-6 text-blue-600" />
                 ) : (
-                  <FileText className="h-6 w-6 text-green-600" />
+                  <FileText className="h-6 w-6 text-blue-600" />
                 )}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">1 File Uploaded:</p>
@@ -226,6 +226,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => document.getElementById('content-upload')?.click()}
+                  className="border-blue-300 text-blue-600 hover:bg-blue-50"
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Select ZIP Files
@@ -235,25 +236,25 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
           ) : (
             <div
               className={cn(
-                'border-2 border-dashed rounded-lg p-6 transition-colors',
+                'border-2 border-dashed rounded-xl p-8 transition-colors',
                 isDragOver 
-                  ? 'border-primary bg-primary/5' 
-                  : 'border-muted-foreground/25'
+                  ? 'border-blue-400 bg-blue-50' 
+                  : 'border-blue-200 bg-blue-50'
               )}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className="text-center space-y-4">
+              <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <Upload className="h-12 w-12 text-blue-600" />
                 </div>
                 
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
+                <div className="space-y-3">
+                  <p className="text-lg font-medium text-gray-900">
                     Drag and drop your promotional content here, or click to select
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-gray-600">
                     Supports PDF and image files (PNG, JPG, GIF, etc.)
                   </p>
                 </div>
@@ -266,9 +267,9 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                   id="content-upload"
                 />
                 <Button
-                  variant="outline"
                   onClick={() => document.getElementById('content-upload')?.click()}
                   disabled={isAnalyzing}
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-lg font-medium"
                 >
                   {isAnalyzing ? (
                     <>
