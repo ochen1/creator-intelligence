@@ -72,7 +72,7 @@ export default function HomePage() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 bg-white border border-gray-200 rounded-xl p-1">
+        <TabsList className="grid w-full grid-cols-5 bg-white border border-gray-200 rounded-xl p-1">
           <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Tag Analytics</TabsTrigger>
           <TabsTrigger value="campaigns" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Campaign Management</TabsTrigger>
           <TabsTrigger value="audience" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Audience Management</TabsTrigger>
