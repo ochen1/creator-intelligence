@@ -228,7 +228,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
   }
 
   return (
-    <div className={cn('brand-card p-8 space-y-6', className)}>
+    <div className={cn('space-y-8', className)}>
       <div className="space-y-2">
         <h2 className="text-xl font-bold flex items-center gap-2 text-brand-primary">
           <Sparkles className="h-5 w-5" />
@@ -320,17 +320,17 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
 
         {/* Brand Analysis */}
         {brandAnalysis.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold">Brand Analysis</h3>
-            <div className="bg-brand-accent border border-brand-border rounded-lg p-4">
-              <p className="text-sm text-brand-primary mb-2">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Brand Analysis</h3>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-700 font-medium">
                 Based off your profile, AI recognized that you:
               </p>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {brandAnalysis.map((item, index) => (
-                  <li key={index} className="text-sm text-brand-primary flex items-start gap-2">
-                    <span className="text-brand-primary mt-1">•</span>
-                    {item}
+                  <li key={index} className="text-sm text-gray-600 flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 bg-brand-primary rounded-full mt-2 flex-shrink-0"></div>
+                    <span>{item}</span>
                   </li>
                 ))}
               </ul>
@@ -338,137 +338,131 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
           </div>
         )}
 
-        {/* Color Palette and Image Preview */}
-        {colorPalette.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold">Recommended Color Palette</h3>
-            <div className="flex gap-4 items-start">
-              {/* Image Preview */}
-              <div className="flex-shrink-0">
-                <div className="w-48 h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden">
-                  {imagePreview ? (
-                    <img 
-                      src={imagePreview} 
-                      alt="Uploaded content preview" 
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : uploadedFile ? (
-                    <div className="text-center text-sm text-gray-600">
-                      <FileImage className="h-8 w-8 mx-auto mb-2" />
-                      <p>Content Preview</p>
-                    </div>
-                  ) : (
-                    <div className="text-center text-sm text-gray-500">
-                      <FileImage className="h-8 w-8 mx-auto mb-2" />
-                      <p>Upload content to see preview</p>
-                    </div>
-                  )}
+        {/* Combined Image Preview, Color Palette, and AI Suggestions */}
+        {(colorPalette.length > 0 || suggestions.length > 0) && (
+          <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-6">
+            <div className="flex gap-8">
+              {/* Left Column - Image Preview and Color Palette */}
+              <div className="flex-1 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900">Recommended Color Palette</h3>
+                
+                {/* Image Preview */}
+                <div className="w-full">
+                  <div className="w-full aspect-square max-w-sm mx-auto bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden">
+                    {imagePreview ? (
+                      <img 
+                        src={imagePreview} 
+                        alt="Uploaded content preview" 
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : uploadedFile ? (
+                      <div className="text-center text-sm text-gray-600">
+                        <FileImage className="h-8 w-8 mx-auto mb-2" />
+                        <p>Content Preview</p>
+                      </div>
+                    ) : (
+                      <div className="text-center text-sm text-gray-500">
+                        <FileImage className="h-8 w-8 mx-auto mb-2" />
+                        <p>Upload content to see preview</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-2"
-                  disabled
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Select ZIP Files
-                </Button>
+                
+                {/* Color Palette - Horizontal Layout */}
+                {colorPalette.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex gap-3 flex-wrap">
+                      {colorPalette.map((color, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2"
+                        >
+                          <div
+                            className="w-8 h-8 rounded border border-gray-300"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                          <div className="text-xs">
+                            <div className="font-mono font-semibold text-gray-900">{color.hex}</div>
+                            <div className="text-gray-600">{color.name}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
-              {/* Color Palette */}
-              <div className="flex-1">
-                <div className="flex gap-2 flex-wrap">
-                  {colorPalette.map((color, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 bg-white border rounded-lg p-2 shadow-sm"
-                    >
+              {/* Right Column - AI Content Suggestions */}
+              {suggestions.length > 0 && (
+                <div className="flex-1 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">AI Content Suggestions</h3>
+                    {isFromCache && (
+                      <Badge variant="outline" className="text-xs text-brand-primary border-brand-primary">
+                        📦 From Cache
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Based off what we've seen, we have prepared some suggestions for you on how you can improve your profile
+                  </p>
+                  <div className="space-y-3">
+                    {suggestions.map((suggestion) => (
                       <div
-                        className="w-8 h-8 rounded border"
-                        style={{ backgroundColor: color.hex }}
-                      />
-                      <div className="text-xs">
-                        <div className="font-mono font-medium">{color.hex}</div>
-                        <div className="text-muted-foreground">{color.name}</div>
+                        key={suggestion.id}
+                        className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className="w-2 h-2 bg-brand-primary rounded-full"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 leading-relaxed">{suggestion.content}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AI Content Suggestions */}
-        {suggestions.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-brand-primary">AI Content Suggestions</h3>
-              {isFromCache && (
-                <Badge variant="outline" className="text-xs text-brand-primary border-brand-primary">
-                  📦 From Cache
-                </Badge>
               )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Based off what we've seen, we have prepared some suggestions for you on how you can improve your profile
-            </p>
-            <div className="space-y-2">
-              {suggestions.map((suggestion) => (
-                <div
-                  key={suggestion.id}
-                  className="flex items-center gap-3 p-3 bg-brand-accent border border-brand-border rounded-lg hover:bg-brand-secondary transition-colors cursor-pointer"
-                >
-                  <div className="flex-shrink-0">
-                    <div className="w-5 h-5 text-brand-primary">
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-                        <path d="M12 2L2 7L12 12L22 7L12 2Z" />
-                        <path d="M2 17L12 22L22 17" />
-                        <path d="M2 12L12 17L22 12" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-brand-primary">{suggestion.content}</p>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
 
         {/* Action Buttons */}
         {suggestions.length > 0 && (
-          <div className="flex justify-between pt-4">
-            <Button
-              variant="outline"
-              onClick={resetUpload}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Upload New Content
-            </Button>
-            <Button
-              onClick={generateNewPost}
-              disabled={isGenerating}
-              className="brand-button"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Generate New Post
-                </>
-              )}
-            </Button>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex justify-between items-center">
+              <Button
+                variant="outline"
+                onClick={resetUpload}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Upload New Content
+              </Button>
+              <Button
+                onClick={generateNewPost}
+                disabled={isGenerating}
+                className="brand-button"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    AI Generate New Post
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
         {/* Cache Management */}
-        <div className="pt-4 border-t border-gray-200">
+        <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               <span className="font-medium">Cache Status:</span> {getCacheStats().totalEntries} entries stored
@@ -481,7 +475,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                 clearCache()
                 toast.success('Cache cleared successfully')
               }}
-              className="text-xs"
+              className="text-xs border-gray-300 text-gray-700 hover:bg-white"
             >
               Clear Cache
             </Button>
