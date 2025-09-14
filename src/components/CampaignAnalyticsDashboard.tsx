@@ -37,7 +37,7 @@ import {
   Filter
 } from 'lucide-react'
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
+const COLORS = ['#2D81DE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
 type CampaignMetrics = {
   totalAttributions: number
@@ -124,7 +124,7 @@ export function CampaignAnalyticsDashboard() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-brand-primary">
                 <BarChart3 className="h-5 w-5" />
                 Campaign Analytics Dashboard
               </CardTitle>
@@ -171,7 +171,7 @@ export function CampaignAnalyticsDashboard() {
                 </SelectContent>
               </Select>
 
-              <Button onClick={exportData} variant="outline" size="sm">
+              <Button onClick={exportData} variant="outline" size="sm" className="border-brand-primary text-brand-primary hover:bg-brand-accent">
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>

@@ -41,6 +41,17 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  
+  /* Brand Colors */
+  --color-brand-primary: #2D81DE;
+  --color-brand-primary-foreground: #ffffff;
+  --color-brand-secondary: #F0F7FF;
+  --color-brand-accent: #E3F2FD;
+  --color-brand-border: #BBDEFB;
+  
+  /* Custom Components */
+  --color-brand-card: #ffffff;
+  --color-brand-card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 :root {
@@ -118,5 +129,49 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .bg-brand-primary {
+    background-color: var(--color-brand-primary);
+  }
+  
+  .text-brand-primary {
+    color: var(--color-brand-primary);
+  }
+  
+  .border-brand-primary {
+    border-color: var(--color-brand-primary);
+  }
+  
+  .bg-brand-secondary {
+    background-color: var(--color-brand-secondary);
+  }
+  
+  .bg-brand-accent {
+    background-color: var(--color-brand-accent);
+  }
+  
+  .border-brand-border {
+    border-color: var(--color-brand-border);
+  }
+  
+  .brand-card {
+    background-color: var(--color-brand-card);
+    box-shadow: var(--color-brand-card-shadow);
+    border-radius: 0.75rem;
+  }
+  
+  .brand-button {
+    background-color: var(--color-brand-primary);
+    color: var(--color-brand-primary-foreground);
+    border-radius: 0.5rem;
+    font-weight: 500;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  
+  .brand-button:hover {
+    background-color: #1e6bb8;
   }
 }

@@ -197,26 +197,25 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
   }
 
   return (
-    <Card className={cn('w-full bg-white shadow-sm border-0 rounded-xl', className)}>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
+    <div className={cn('brand-card p-8 space-y-6', className)}>
+      <div className="space-y-2">
+        <h2 className="text-xl font-bold flex items-center gap-2 text-brand-primary">
           <Sparkles className="h-5 w-5" />
           AI Content Suggestions
-        </CardTitle>
-        <CardDescription className="text-gray-600 text-base">
+        </h2>
+        <p className="text-gray-600 text-base">
           Upload your promotional content (PDF or image) to get AI-powered suggestions based on your audience data and campaigns.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* File Upload Section */}
+        </p>
+      </div>
+      {/* File Upload Section */}
         <div className="space-y-4">
           {uploadedFile ? (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="rounded-xl p-4 bg-brand-accent border border-brand-primary">
               <div className="flex items-center gap-3">
                 {uploadedFile.type.startsWith('image/') ? (
-                  <FileImage className="h-6 w-6 text-blue-600" />
+                  <FileImage className="h-6 w-6 text-brand-primary" />
                 ) : (
-                  <FileText className="h-6 w-6 text-blue-600" />
+                  <FileText className="h-6 w-6 text-brand-primary" />
                 )}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">1 File Uploaded:</p>
@@ -226,7 +225,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => document.getElementById('content-upload')?.click()}
-                  className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                  className="hover:bg-opacity-10 border-brand-primary text-brand-primary bg-transparent"
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Select ZIP Files
@@ -236,10 +235,10 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
           ) : (
             <div
               className={cn(
-                'border-2 border-dashed rounded-xl p-8 transition-colors',
+                'border-2 border-dashed rounded-xl p-8 transition-colors border-brand-primary',
                 isDragOver 
-                  ? 'border-blue-400 bg-blue-50' 
-                  : 'border-blue-200 bg-blue-50'
+                  ? 'border-opacity-60 bg-brand-secondary' 
+                  : 'border-opacity-30 bg-brand-accent'
               )}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -247,7 +246,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
             >
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <Upload className="h-12 w-12 text-blue-600" />
+                  <Upload className="h-12 w-12 text-brand-primary" />
                 </div>
                 
                 <div className="space-y-3">
@@ -269,7 +268,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                 <Button
                   onClick={() => document.getElementById('content-upload')?.click()}
                   disabled={isAnalyzing}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-lg font-medium"
+                  className="brand-button px-8 py-3"
                 >
                   {isAnalyzing ? (
                     <>
@@ -292,14 +291,14 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
         {brandAnalysis.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-lg font-semibold">Brand Analysis</h3>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800 mb-2">
+            <div className="bg-brand-accent border border-brand-border rounded-lg p-4">
+              <p className="text-sm text-brand-primary mb-2">
                 Based off your profile, AI recognized that you:
               </p>
               <ul className="space-y-1">
                 {brandAnalysis.map((item, index) => (
-                  <li key={index} className="text-sm text-blue-700 flex items-start gap-2">
-                    <span className="text-blue-500 mt-1">•</span>
+                  <li key={index} className="text-sm text-brand-primary flex items-start gap-2">
+                    <span className="text-brand-primary mt-1">•</span>
                     {item}
                   </li>
                 ))}
@@ -372,7 +371,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
         {/* AI Content Suggestions */}
         {suggestions.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-lg font-semibold text-blue-600">AI Content Suggestions</h3>
+            <h3 className="text-lg font-semibold text-brand-primary">AI Content Suggestions</h3>
             <p className="text-sm text-muted-foreground">
               Based off what we've seen, we have prepared some suggestions for you on how you can improve your profile
             </p>
@@ -380,10 +379,10 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
               {suggestions.map((suggestion) => (
                 <div
                   key={suggestion.id}
-                  className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                  className="flex items-center gap-3 p-3 bg-brand-accent border border-brand-border rounded-lg hover:bg-brand-secondary transition-colors cursor-pointer"
                 >
                   <div className="flex-shrink-0">
-                    <div className="w-5 h-5 text-blue-600">
+                    <div className="w-5 h-5 text-brand-primary">
                       <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
                         <path d="M12 2L2 7L12 12L22 7L12 2Z" />
                         <path d="M2 17L12 22L22 17" />
@@ -392,7 +391,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-blue-900">{suggestion.content}</p>
+                    <p className="text-sm font-medium text-brand-primary">{suggestion.content}</p>
                   </div>
                 </div>
               ))}
@@ -413,7 +412,7 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
             <Button
               onClick={generateNewPost}
               disabled={isGenerating}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="brand-button"
             >
               {isGenerating ? (
                 <>
@@ -429,7 +428,6 @@ export function AIContentSuggestions({ className }: AIContentSuggestionsProps) {
             </Button>
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

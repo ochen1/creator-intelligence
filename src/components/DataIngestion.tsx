@@ -360,32 +360,29 @@ export function DataIngestion() {
   const pendingFiles = files.filter(f => f.status === 'pending')
 
   return (
-    <Card className="bg-white shadow-sm border-0 rounded-xl">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
+    <div className="brand-card p-8 space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-xl font-bold text-brand-primary">
           Data Ingestion
-        </CardTitle>
-        <CardDescription className="text-gray-600 text-base">
+        </h2>
+        <p className="text-gray-600 text-base">
           Upload your Instagram data export ZIP files to import user data. You can select multiple files or drag and drop them.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Upload Section */}
+        </p>
+      </div>
+      {/* Upload Section */}
         <div className="space-y-4">
           <div
-            className={`border-2 border-dashed rounded-xl p-8 transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 transition-colors border-brand-primary ${
               isDragOver 
-                ? 'border-blue-400 bg-blue-50' 
-                : 'border-blue-200 bg-blue-50'
+                ? 'border-opacity-60 bg-brand-secondary' 
+                : 'border-opacity-30 bg-brand-accent'
             }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
             <div className="text-center space-y-6">
-              <FileArchive className={`h-12 w-12 mx-auto ${
-                isDragOver ? 'text-blue-600' : 'text-blue-600'
-              }`} />
+              <FileArchive className="h-12 w-12 mx-auto text-brand-primary" />
               <div className="space-y-3">
                 <h3 className="text-lg font-medium text-gray-900">
                   {isDragOver ? 'Drop ZIP files here' : 'Upload Instagram Data Exports'}
@@ -400,7 +397,7 @@ export function DataIngestion() {
               <Button
                 onClick={handleFileSelect}
                 disabled={processingFiles.length > 0}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-lg font-medium"
+                className="brand-button px-8 py-3"
               >
                 <Upload className="h-4 w-4 mr-2" />
                 Select ZIP Files
@@ -557,16 +554,15 @@ export function DataIngestion() {
         )}
 
         {/* Instructions */}
-        <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-          <h4 className="font-medium">How to get your Instagram data:</h4>
-          <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+        <div className="space-y-2">
+          <h4 className="font-medium text-gray-900">How to get your Instagram Data:</h4>
+          <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
             <li>Go to Instagram Settings & Privacy → Account Center → Your information and permissions → Download your information</li>
             <li>Request a download of your data in JSON format</li>
             <li>Instagram will email you a download link (this can take a few days)</li>
             <li>Download the ZIP files and upload them here (you can upload multiple exports)</li>
           </ol>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }
