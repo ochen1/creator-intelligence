@@ -98,7 +98,7 @@ export function DataIngestion() {
     // Update status to processing
     setFiles(prev => prev.map(f => 
       f.id === processedFile.id 
-        ? { ...f, status: 'processing' as FileStatus, startTime: Date.now() }
+        ? { ...f, status: 'processing' as FileStatus, startTime: typeof window !== 'undefined' ? Date.now() : 0 }
         : f
     ))
 
@@ -195,7 +195,7 @@ export function DataIngestion() {
       // Update status to success
       setFiles(prev => prev.map(f => 
         f.id === processedFile.id 
-          ? { ...f, status: 'success' as FileStatus, result, endTime: Date.now() }
+          ? { ...f, status: 'success' as FileStatus, result, endTime: typeof window !== 'undefined' ? Date.now() : 0 }
           : f
       ))
 
@@ -207,7 +207,7 @@ export function DataIngestion() {
       // Update status to error
       setFiles(prev => prev.map(f => 
         f.id === processedFile.id 
-          ? { ...f, status: 'error' as FileStatus, error: errorMessage, endTime: Date.now() }
+          ? { ...f, status: 'error' as FileStatus, error: errorMessage, endTime: typeof window !== 'undefined' ? Date.now() : 0 }
           : f
       ))
 
@@ -350,7 +350,7 @@ export function DataIngestion() {
 
   const getProcessingTime = (file: ProcessedFile) => {
     if (!file.startTime) return null
-    const endTime = file.endTime || Date.now()
+    const endTime = file.endTime || (typeof window !== 'undefined' ? Date.now() : 0)
     const duration = Math.round((endTime - file.startTime) / 1000)
     return `${duration}s`
   }
@@ -360,39 +360,34 @@ export function DataIngestion() {
   const pendingFiles = files.filter(f => f.status === 'pending')
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Upload className="h-5 w-5" />
+    <div className="brand-card p-8 space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-xl font-bold text-brand-primary">
           Data Ingestion
-        </CardTitle>
-        <CardDescription>
-          Upload your Instagram data export ZIP files to import follower and following data.
-          You can select multiple files or drag and drop them.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Upload Section */}
+        </h2>
+        <p className="text-gray-600 text-base">
+          Upload your Instagram data export ZIP files to import user data. You can select multiple files or drag and drop them.
+        </p>
+      </div>
+      {/* Upload Section */}
         <div className="space-y-4">
           <div
-            className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 transition-colors border-brand-primary ${
               isDragOver 
-                ? 'border-primary bg-primary/5' 
-                : 'border-muted-foreground/25'
+                ? 'border-opacity-60 bg-brand-secondary' 
+                : 'border-opacity-30 bg-brand-accent'
             }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <div className="text-center space-y-4">
-              <FileArchive className={`h-12 w-12 mx-auto ${
-                isDragOver ? 'text-primary' : 'text-muted-foreground'
-              }`} />
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">
+            <div className="text-center space-y-6">
+              <FileArchive className="h-12 w-12 mx-auto text-brand-primary" />
+              <div className="space-y-3">
+                <h3 className="text-lg font-medium text-gray-900">
                   {isDragOver ? 'Drop ZIP files here' : 'Upload Instagram Data Exports'}
                 </h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                <p className="text-sm text-gray-600 max-w-md mx-auto">
                   {isDragOver 
                     ? 'Release to add the files to the processing queue'
                     : 'Drag and drop ZIP files here, or click to select multiple files. Each file will be processed individually.'
@@ -402,7 +397,7 @@ export function DataIngestion() {
               <Button
                 onClick={handleFileSelect}
                 disabled={processingFiles.length > 0}
-                size="lg"
+                className="brand-button px-8 py-3"
               >
                 <Upload className="h-4 w-4 mr-2" />
                 Select ZIP Files
@@ -559,16 +554,15 @@ export function DataIngestion() {
         )}
 
         {/* Instructions */}
-        <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-          <h4 className="font-medium">How to get your Instagram data:</h4>
-          <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+        <div className="space-y-2">
+          <h4 className="font-medium text-gray-900">How to get your Instagram Data:</h4>
+          <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
             <li>Go to Instagram Settings & Privacy → Account Center → Your information and permissions → Download your information</li>
             <li>Request a download of your data in JSON format</li>
             <li>Instagram will email you a download link (this can take a few days)</li>
             <li>Download the ZIP files and upload them here (you can upload multiple exports)</li>
           </ol>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

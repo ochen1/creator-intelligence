@@ -54,7 +54,7 @@ interface ClassifierResponse {
   [k: string]: any
 }
 
-const CLASSIFIER_BASE = 'https://7005d0347fac.ngrok-free.app/get-user-info'
+const CLASSIFIER_BASE = 'https://7005d0347fac.ngrok-free.app'
 
 export function ProfileIdentification() {
   // Query controls
@@ -138,7 +138,7 @@ export function ProfileIdentification() {
     async (p: RecentProfile): Promise<void> => {
       updateRun(p.profile_pk, {
         status: 'running',
-        startedAt: Date.now(),
+        startedAt: typeof window !== 'undefined' ? Date.now() : 0,
         error: undefined,
         labels: undefined,
         newAssignments: 0,
@@ -152,15 +152,17 @@ export function ProfileIdentification() {
 
       try {
         // 1. Call classifier
-        const res = await fetch(`${CLASSIFIER_BASE}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: p.current_username }),
+        const res = await fetch(`${CLASSIFIER_BASE}/get-user-info`, {
+          method: 'POST', 
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            username: p.current_username
+          })
         })
-
-        if (!res.ok) {
-          throw new Error(`Classifier HTTP ${res.status}`)
-        }
 
         const json: ClassifierResponse = await res.json()
         labels = Array.isArray(json.labels) ? json.labels : []
@@ -171,8 +173,8 @@ export function ProfileIdentification() {
             status: 'skipped',
             labels: [],
             classifierText,
-            endedAt: Date.now(),
-            durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+            endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+            durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
           })
           return
         }
@@ -245,8 +247,8 @@ export function ProfileIdentification() {
           classifierText,
           newTagsCreated: createdTags,
           newAssignments,
-          endedAt: Date.now(),
-          durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+          endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+          durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
         })
       } catch (err: any) {
         updateRun(p.profile_pk, {
@@ -254,8 +256,8 @@ export function ProfileIdentification() {
           error: err?.message || 'Unknown error',
           labels,
           classifierText,
-          endedAt: Date.now(),
-          durationMs: Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()),
+          endedAt: typeof window !== 'undefined' ? Date.now() : 0,
+          durationMs: typeof window !== 'undefined' ? Date.now() - (runs.get(p.profile_pk)?.startedAt || Date.now()) : 0,
         })
       }
     },
@@ -335,16 +337,16 @@ export function ProfileIdentification() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="bg-white shadow-sm border-0 rounded-xl">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl font-bold text-blue-600 flex items-center gap-2">
           <Hash className="h-5 w-5" />
-          Profile Identification Agent Swarm Orchestrator
-          <Badge variant="outline" className="ml-2">
+          Stalking Agent Swarm Orchestrator
+          <Badge variant="outline" className="ml-2 bg-gray-100 text-gray-700 border-gray-300">
             {profiles.length} profiles
           </Badge>
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-gray-600 text-base">
           Automatically infer audience characteristics and apply tags (auto-assigned) using local classifier.
         </CardDescription>
       </CardHeader>
@@ -481,7 +483,7 @@ export function ProfileIdentification() {
                 if (run?.startedAt && run?.endedAt) {
                   durationDisplay = formatSeconds(run.endedAt - run.startedAt)
                 } else if (run?.startedAt && run?.status === 'running') {
-                  durationDisplay = formatSeconds(Date.now() - run.startedAt)
+                  durationDisplay = formatSeconds(typeof window !== 'undefined' ? Date.now() - run.startedAt : 0)
                 }
 
                 let statusNode: React.ReactNode = run?.status || 'pending'

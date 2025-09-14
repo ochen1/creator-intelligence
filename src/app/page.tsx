@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CampaignAnalyticsDashboard } from '@/components/CampaignAnalyticsDashboard'
 import { SwarmCommand } from '@/components/SwarmCommand'
+import { AIContentSuggestions } from '@/components/AIContentSuggestions'
 
 export default function HomePage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
@@ -26,37 +27,63 @@ export default function HomePage() {
   }
 
   return (
-    <main className="container mx-auto py-8 space-y-8">
+    <main className="min-h-screen bg-white">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold">Creator Intelligence Platform</h1>
-        <p className="text-lg text-muted-foreground">
-          Local-first audience intelligence platform for Instagram creators
+      <header className="bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/images/igcrm.png" alt="IGCrm Logo" className="w-8 h-8" />
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-brand-primary">CREATOR</span>
+              <span className="text-2xl font-bold text-gray-900">INTELLIGENCE</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </div>
+        </div>
+      </header>
+
+      {/* Welcome Section */}
+      <section className="text-center py-16 px-6">
+        <div className="w-20 h-20 mx-auto mb-6">
+          <img src="/images/igcrm.png" alt="IGCrm Logo" className="w-20 h-20" />
+        </div>
+        <h1 className="text-5xl font-light mb-2">
+          <span className="text-gray-500">Welcome to</span> <span className="font-bold text-brand-primary">CREATOR</span> <span className="font-bold text-gray-900">INTELLIGENCE</span>
+        </h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Investigate analytics from your social media platforms and get AI-powered insights to improve engagement and content strategy.
         </p>
-      </div>
+      </section>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-6 pb-16 space-y-8">
 
       {/* Data Ingestion */}
       <DataIngestion />
-
-      {/* Profile Identification */}
-      <ProfileIdentification />
+      
+      {/* AI Content Suggestions */}
+      <AIContentSuggestions />
       
       <Separator />
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="overview">Tag Analytics</TabsTrigger>
-            <TabsTrigger value="campaigns">Campaign Management</TabsTrigger>
-            <TabsTrigger value="audience">Audience Management</TabsTrigger>
-            <TabsTrigger value="attribution">Attribution Tracking</TabsTrigger>
-            <TabsTrigger value="swarm">Agentic Swarm</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4 bg-white border border-gray-200 rounded-xl p-1">
+          <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Tag Analytics</TabsTrigger>
+          <TabsTrigger value="campaigns" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Campaign Management</TabsTrigger>
+          <TabsTrigger value="audience" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Audience Management</TabsTrigger>
+          <TabsTrigger value="attribution" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Attribution Tracking</TabsTrigger>
+          <TabsTrigger value="swarm" className="rounded-lg data-[state=active]:bg-brand-primary data-[state=active]:text-white">Agentic Swarm</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Tag Analytics Dashboard</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-2xl font-bold text-brand-primary">Tag Analytics Dashboard</h2>
+            <p className="text-gray-600">
               Analyze tag patterns and word clouds for followers vs churners to understand audience segments and engagement patterns.
             </p>
           </div>
@@ -66,8 +93,8 @@ export default function HomePage() {
 
         <TabsContent value="campaigns" className="space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Campaign Management</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-2xl font-bold text-brand-primary">Campaign Management</h2>
+            <p className="text-gray-600">
               Create and manage your content and outbound follow campaigns for tracking attribution.
             </p>
           </div>
@@ -76,8 +103,8 @@ export default function HomePage() {
 
         <TabsContent value="audience" className="space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Audience Management</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-2xl font-bold text-brand-primary">Audience Management</h2>
+            <p className="text-gray-600">
               Manage your audience profiles, tags, and track engagement patterns.
             </p>
           </div>
@@ -91,8 +118,8 @@ export default function HomePage() {
 
         <TabsContent value="attribution" className="space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Attribution Tracking</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-2xl font-bold text-brand-primary">Attribution Tracking</h2>
+            <p className="text-gray-600">
               Review and manage attribution assignments for recent profile interactions.
             </p>
           </div>
@@ -111,6 +138,7 @@ export default function HomePage() {
           <SwarmCommand />
         </TabsContent>
       </Tabs>
+      </div>
 
       {/* Profile Detail Sheet */}
       <ProfileSheet
