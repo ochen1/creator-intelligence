@@ -251,9 +251,37 @@ export async function POST(request: Request) {
       const newUsernames = allUsernames.filter(u => u && !existingUsernames.has(u))
       
       if (newUsernames.length > 0) {
+        // Compute first_seen for each new username:
+        // - consider followersMap, followingMap, pendingMap timestamps (ms)
+        // - convert ms -> Date only if within sane bounds via getSaneDateFromMs
+        // - pick the earliest available sane timestamp, otherwise use snapshotDateObj
+        const firstSeenFor = new Map<string, Date>()
+        for (const username of newUsernames) {
+          const candidates: Date[] = []
+          const fMs = followersMap.get(username) ?? null
+          const foMs = followingMap.get(username) ?? null
+          const pMs = pendingMap.get(username) ?? null
+
+          const fDate = getSaneDateFromMs(fMs)
+          const foDate = getSaneDateFromMs(foMs)
+          const pDate = getSaneDateFromMs(pMs)
+
+          if (fDate) candidates.push(fDate)
+          if (foDate) candidates.push(foDate)
+          if (pDate) candidates.push(pDate)
+
+          // pick earliest candidate or fallback to snapshot timestamp
+          const first = candidates.length > 0
+            ? candidates.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b))
+            : snapshotDateObj
+
+          firstSeenFor.set(username, first)
+        }
+
         await tx.profile.createMany({
           data: newUsernames.map(username => ({
             current_username: username,
+            first_seen_ts: firstSeenFor.get(username),
           }))
         })
       }
